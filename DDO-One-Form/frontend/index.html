@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDO One Form</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">DDO One</span>
+          <h1>Company onboarding form for trusted business details.</h1>
+          <p>
+            Share your company profile, headquarters information, contact details, and
+            optional documents in one clean workflow.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="about-trigger"
+          id="aboutTrigger"
+          aria-controls="aboutPanel"
+          aria-expanded="false"
+        >
+          About
+        </button>
+      </header>
+
+      <main class="layout">
+        <section class="form-card">
+          <div class="card-header">
+            <div>
+              <p class="section-tag">Online Form</p>
+              <h2>DDO One</h2>
+            </div>
+            <p class="helper-text">Fields marked with <span>*</span> are required.</p>
+          </div>
+
+          <div class="status-banner success-banner" id="successBanner" role="status" aria-live="polite">
+            DDO One form submitted successfully. Details sent to DDO team.
+          </div>
+          <div class="status-banner error-banner" id="errorBanner" role="alert" aria-live="assertive"></div>
+
+          <form id="ddoOneForm" novalidate>
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>1. Company Details</h3>
+                <p>Tell us about the company profile and official contact information.</p>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="companyName">Company Name <span>*</span></label>
+                  <input id="companyName" name="companyName" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+
+                <div class="field">
+                  <label for="companyWebsite">Company Website URL <span>*</span></label>
+                  <input
+                    id="companyWebsite"
+                    name="companyWebsite"
+                    type="url"
+                    placeholder="https://example.com"
+                    data-required="true"
+                    data-validate="url"
+                  />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="companyDescription">Company Details / Description <span>*</span></label>
+                <textarea
+                  id="companyDescription"
+                  name="companyDescription"
+                  rows="4"
+                  data-required="true"
+                ></textarea>
+                <small class="error-text"></small>
+              </div>
+
+              <div class="grid email-verify-row">
+                <div class="field">
+                  <label for="companyEmail">Company Email <span>*</span></label>
+                  <input
+                    id="companyEmail"
+                    name="companyEmail"
+                    type="email"
+                    placeholder="name@company.com"
+                    data-required="true"
+                    data-validate="email"
+                  />
+                  <small class="error-text"></small>
+                </div>
+
+                <div class="verify-box">
+                  <label for="verificationCode">Email Verification Input</label>
+                  <div class="verify-controls">
+                    <input
+                      id="verificationCode"
+                      name="verificationCode"
+                      type="text"
+                      placeholder="Enter code"
+                    />
+                    <button type="button" class="secondary-button" id="verifyEmailButton">
+                      Verify Company Email
+                    </button>
+                  </div>
+                  <small class="verify-status" id="verifyStatus">Not verified yet.</small>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="companyPhone">Company Phone Number <span>*</span></label>
+                <input
+                  id="companyPhone"
+                  name="companyPhone"
+                  type="tel"
+                  inputmode="numeric"
+                  placeholder="Numbers only"
+                  data-required="true"
+                  data-validate="phone"
+                />
+                <small class="error-text"></small>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>2. Company Headquarter / Main Office Details</h3>
+                <p>Provide the main office location and office contact details.</p>
+              </div>
+
+              <div class="grid three-col">
+                <div class="field">
+                  <label for="hqCity">City <span>*</span></label>
+                  <input id="hqCity" name="hqCity" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="hqState">State <span>*</span></label>
+                  <input id="hqState" name="hqState" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="hqCountry">Country <span>*</span></label>
+                  <input id="hqCountry" name="hqCountry" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="hqZip">Pincode / ZIP Code <span>*</span></label>
+                  <input id="hqZip" name="hqZip" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="hqLandmark">Landmark</label>
+                  <input id="hqLandmark" name="hqLandmark" type="text" />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="hqAddress">Full Office Address <span>*</span></label>
+                <textarea id="hqAddress" name="hqAddress" rows="3" data-required="true"></textarea>
+                <small class="error-text"></small>
+              </div>
+
+              <div class="field">
+                <label for="hqPhone">Office Contact Number <span>*</span></label>
+                <input
+                  id="hqPhone"
+                  name="hqPhone"
+                  type="tel"
+                  inputmode="numeric"
+                  placeholder="Numbers only"
+                  data-required="true"
+                  data-validate="phone"
+                />
+                <small class="error-text"></small>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>3. Person Filling This Form</h3>
+                <p>Let us know who is completing this submission on behalf of the company.</p>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="personName">Full Name <span>*</span></label>
+                  <input id="personName" name="personName" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="personEmail">Email <span>*</span></label>
+                  <input
+                    id="personEmail"
+                    name="personEmail"
+                    type="email"
+                    data-required="true"
+                    data-validate="email"
+                  />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="grid three-col">
+                <div class="field">
+                  <label for="personPhone">Phone Number <span>*</span></label>
+                  <input
+                    id="personPhone"
+                    name="personPhone"
+                    type="tel"
+                    inputmode="numeric"
+                    data-required="true"
+                    data-validate="phone"
+                  />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="personCountry">Country <span>*</span></label>
+                  <input id="personCountry" name="personCountry" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="personState">State <span>*</span></label>
+                  <input id="personState" name="personState" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="grid three-col">
+                <div class="field">
+                  <label for="personCity">City <span>*</span></label>
+                  <input id="personCity" name="personCity" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="personZip">Pincode <span>*</span></label>
+                  <input id="personZip" name="personZip" type="text" data-required="true" />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="personPosition">Position in Company <span>*</span></label>
+                  <input
+                    id="personPosition"
+                    name="personPosition"
+                    type="text"
+                    data-required="true"
+                  />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="personDepartment">Department <span>*</span></label>
+                  <input
+                    id="personDepartment"
+                    name="personDepartment"
+                    type="text"
+                    data-required="true"
+                  />
+                  <small class="error-text"></small>
+                </div>
+                <div class="field">
+                  <label for="referenceNumber">ID / Reference Number if available</label>
+                  <input id="referenceNumber" name="referenceNumber" type="text" />
+                  <small class="error-text"></small>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="personAddress">Full Address <span>*</span></label>
+                <textarea
+                  id="personAddress"
+                  name="personAddress"
+                  rows="3"
+                  data-required="true"
+                ></textarea>
+                <small class="error-text"></small>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>4. Optional Company Uploads</h3>
+                <p>Upload supporting files if they are available.</p>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="companyPhotos">Company Photos</label>
+                  <input id="companyPhotos" name="companyPhotos" type="file" multiple />
+                </div>
+                <div class="field">
+                  <label for="companyLogo">Company Logo</label>
+                  <input id="companyLogo" name="companyLogo" type="file" accept="image/*" />
+                </div>
+              </div>
+
+              <div class="grid two-col">
+                <div class="field">
+                  <label for="companyProof">Company Registered Proof</label>
+                  <input id="companyProof" name="companyProof" type="file" />
+                </div>
+                <div class="field">
+                  <label for="otherDocuments">Other Documents</label>
+                  <input id="otherDocuments" name="otherDocuments" type="file" multiple />
+                </div>
+              </div>
+            </section>
+
+            <div class="submit-row">
+              <button type="submit" class="submit-button" id="submitButton">Submit Form</button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="info-card">
+          <h3>What this form covers</h3>
+          <ul>
+            <li>Official company contact and website details</li>
+            <li>Main office address and headquarters contact</li>
+            <li>Authorized representative information</li>
+            <li>Optional business documents and uploads</li>
+          </ul>
+        </aside>
+      </main>
+    </div>
+
+    <div class="about-panel" id="aboutPanel" aria-hidden="true">
+      <div class="about-content">
+        <button type="button" class="panel-close" id="aboutClose" aria-label="Close about panel">
+          X
+        </button>
+        <p class="section-tag">About DDO One</p>
+        <h3>What is DDO One?</h3>
+        <p>
+          DDO One is a structured digital intake form for collecting company identity,
+          office, contact, and document details in one professional submission flow.
+        </p>
+        <p>
+          It helps teams capture complete onboarding information with consistent formatting,
+          validation, and clear sections for faster review.
+        </p>
+      </div>
+    </div>
+
+    <div class="backdrop" id="panelBackdrop" hidden></div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

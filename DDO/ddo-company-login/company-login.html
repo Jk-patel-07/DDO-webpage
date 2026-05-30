@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDO Company Login</title>
+    <link rel="stylesheet" href="./login.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">DDO Animation</p>
+          <h1>DDO company login</h1>
+          <p class="hero-copy">
+            Login works only for approved companies from the same DDO database.
+          </p>
+        </div>
+        <a class="nav-link" href="../ddo-one-form/index.html">Back to Registration</a>
+      </header>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <p class="section-label">Login Panel</p>
+            <h2>Approved Company Access</h2>
+          </div>
+        </div>
+
+        <div class="banner success" id="successBanner" role="status" aria-live="polite"></div>
+        <div class="banner error" id="errorBanner" role="alert" aria-live="assertive"></div>
+
+        <form id="companyLoginForm" novalidate>
+          <label class="field">
+            <span>Company ID</span>
+            <input type="text" id="companyId" name="companyId" />
+          </label>
+          <label class="field">
+            <span>Company Key</span>
+            <input type="text" id="companyKey" name="companyKey" />
+          </label>
+          <label class="field">
+            <span>Company Password</span>
+            <input type="password" id="companyPassword" name="companyPassword" />
+          </label>
+          <div class="button-row">
+            <button type="submit" id="loginButton">Login</button>
+            <button type="button" class="secondary" id="forgotPasswordButton">Forgot password</button>
+          </div>
+        </form>
+      </section>
+
+    </div>
+
+    <script src="./login.js"></script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDO Company Dashboard</title>
+    <link rel="stylesheet" href="./login.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">DDO Animation</p>
+          <h1>Company dashboard</h1>
+          <p class="hero-copy">
+            This dashboard reads from the same approved company document stored in MongoDB.
+          </p>
+        </div>
+        <button type="button" class="secondary" id="logoutButton">Logout</button>
+      </header>
+
+      <section class="card dashboard" id="dashboardCard">
+        <div class="card-head">
+          <div>
+            <p class="section-label">Company Dashboard</p>
+            <h2>Approved Company Profile</h2>
+          </div>
+        </div>
+
+        <div class="banner success" id="successBanner" role="status" aria-live="polite"></div>
+        <div class="banner error" id="errorBanner" role="alert" aria-live="assertive"></div>
+
+        <div class="dashboard-grid">
+          <div class="dashboard-item">
+            <span>Company Name</span>
+            <strong id="dashboardCompanyName">-</strong>
+          </div>
+          <div class="dashboard-item">
+            <span>Company Email</span>
+            <strong id="dashboardCompanyEmail">-</strong>
+          </div>
+          <div class="dashboard-item">
+            <span>Company Phone</span>
+            <strong id="dashboardCompanyPhone">-</strong>
+          </div>
+          <div class="dashboard-item">
+            <span>Company Website</span>
+            <strong id="dashboardCompanyWebsite">-</strong>
+          </div>
+          <div class="dashboard-item">
+            <span>Company Status</span>
+            <strong id="dashboardCompanyStatus">-</strong>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="./login.js"></script>
+  </body>
+</html>
