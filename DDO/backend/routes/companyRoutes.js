@@ -40,11 +40,11 @@ const transporter = nodemailer.createTransport({
 });
 
 function backendBaseUrl() {
-  return process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_BASE_URL || "http://localhost:5000";
+  return process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_BASE_URL || "http://localhost:8080";
 }
 
 function frontendBaseUrl() {
-  return process.env.FRONTEND_URL || process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_BASE_URL || "http://localhost:5000";
+  return process.env.FRONTEND_URL || process.env.BACKEND_PUBLIC_URL || process.env.BACKEND_BASE_URL || "http://localhost:8080";
 }
 
 function companyLoginUrl() {

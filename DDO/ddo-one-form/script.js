@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = window.location.origin;
 
 const form = document.getElementById("companyApplicationForm");
 const submitButton = document.getElementById("submitButton");

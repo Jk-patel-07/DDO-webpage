@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = window.location.origin;
 const TOKEN_KEY = "ddoCompanyToken";
 const DASHBOARD_PATH = "./company-dashboard.html";
 

@@ -54,7 +54,9 @@ export default function DDOCompanyWebsite() {
         <nav className="hidden items-center gap-8 text-sm text-white/75 md:flex">
           <a href="#about" className="transition hover:text-emerald-300">About</a>
           <a href="#services" className="transition hover:text-emerald-300">Services</a>
-          <a href="/DDO-One-Form/frontend/" className="transition hover:text-emerald-300">DDO One</a>
+          <a href="/apps.html" className="transition hover:text-emerald-300">Our Apps</a>
+          <a href="/CFM/company-login.html" className="transition hover:text-emerald-300">CFM</a>
+          <a href="/DDO/ddo-one-form/" className="transition hover:text-emerald-300">DDO One</a>
           <a href="#contact" className="transition hover:text-emerald-300">Contact</a>
         </nav>
       </header>
@@ -102,12 +104,16 @@ export default function DDOCompanyWebsite() {
               >
                 <Button
                   className="rounded-2xl px-6 py-6 shadow-xl shadow-emerald-500/20"
-                  onClick={() => window.location.href = "/DDO-One-Form/frontend/"}
+                  onClick={() => window.location.href = "/DDO/ddo-one-form/"}
                 >
                   Open DDO One <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
-                <Button variant="outline" className="rounded-2xl px-6 py-6">
-                  View Services
+                <Button
+                  variant="outline"
+                  className="rounded-2xl px-6 py-6"
+                  onClick={() => window.location.href = "/CFM/company-login.html"}
+                >
+                  Open CFM
                 </Button>
               </motion.div>
             </div>

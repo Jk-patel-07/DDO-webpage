@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CFM Dashboard</title>
+    <link rel="stylesheet" href="./cfm-dashboard.css" />
+  </head>
+  <body>
+    <main class="cfm-shell">
+      <aside class="sidebar">
+        <div>
+          <span class="sidebar-kicker">CFM</span>
+          <h1>Code File Manager</h1>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="CFM actions">
+          <button type="button" class="nav-item active">Add File</button>
+          <button type="button" class="nav-item">Add Folder</button>
+          <button type="button" class="nav-item">Open File</button>
+          <button type="button" class="nav-item">Rename File/Folder</button>
+          <button type="button" class="nav-item">Delete File/Folder</button>
+          <button type="button" class="nav-item">Upload File</button>
+          <button type="button" class="nav-item">Download File</button>
+          <button type="button" class="nav-item">Search File</button>
+          <button type="button" class="nav-item">Recent Files</button>
+        </nav>
+      </aside>
+
+      <section class="workspace">
+        <header class="workspace-header">
+          <div>
+            <p class="workspace-kicker">DDO Tool</p>
+            <h2>Power by DDO</h2>
+          </div>
+
+          <div class="header-actions">
+            <button type="button" class="ghost-button" id="settingsButton">Settings</button>
+            <button type="button" class="ghost-button" id="logoutButton">Logout</button>
+          </div>
+        </header>
+
+        <section class="workspace-card">
+          <div class="intro-copy">
+            <h3>Welcome to CFM</h3>
+            <p>
+              Manage code files, folders, uploads, and recent work from one DDO company
+              dashboard. The current version is a clean interface shell connected to your
+              existing company authentication system.
+            </p>
+          </div>
+
+          <div class="feature-grid">
+            <article class="feature-card">
+              <span class="feature-tag">Workspace</span>
+              <strong>File Controls</strong>
+              <p>Create, rename, remove, and organize code assets with a simple action list.</p>
+            </article>
+            <article class="feature-card">
+              <span class="feature-tag">Search</span>
+              <strong>Fast Access</strong>
+              <p>Search recent files and quickly jump between folders inside one manager view.</p>
+            </article>
+            <article class="feature-card">
+              <span class="feature-tag">Sync</span>
+              <strong>Upload & Download</strong>
+              <p>Handle incoming and outgoing file operations from a single sidebar workflow.</p>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <aside class="profile-panel">
+        <div class="profile-card">
+          <p class="profile-kicker">Company Profile</p>
+          <h3 id="companyName">Loading...</h3>
+          <dl class="profile-list">
+            <div>
+              <dt>Company Email</dt>
+              <dd id="companyEmail">-</dd>
+            </div>
+            <div>
+              <dt>Company Phone</dt>
+              <dd id="companyPhone">-</dd>
+            </div>
+            <div>
+              <dt>Company Website</dt>
+              <dd id="companyWebsite">-</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd id="companyStatus">-</dd>
+            </div>
+          </dl>
+        </div>
+      </aside>
+    </main>
+
+    <script src="./cfm-dashboard.js"></script>
+  </body>
+</html>

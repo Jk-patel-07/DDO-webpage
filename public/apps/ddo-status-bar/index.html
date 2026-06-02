@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDO Status Bar</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #f5f5f5;
+        background:
+          radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 28%),
+          linear-gradient(180deg, #040404 0%, #0b0b0b 100%);
+      }
+
+      .page-shell {
+        width: min(980px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 36px 0 48px;
+      }
+
+      .card {
+        border: 1px solid #2a2a2a;
+        border-radius: 30px;
+        padding: 28px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+      }
+
+      .eyebrow {
+        display: inline-block;
+        margin: 0 0 10px;
+        padding: 8px 12px;
+        border: 1px solid #2a2a2a;
+        border-radius: 999px;
+        color: #b6b6b6;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .status-bar {
+        margin-top: 26px;
+        border: 1px solid #2a2a2a;
+        border-radius: 20px;
+        padding: 16px 18px;
+        background: #101010;
+      }
+
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid #1e1e1e;
+      }
+
+      .status-row:last-child {
+        border-bottom: none;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #181818;
+        color: #d9d9d9;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ffffff;
+      }
+
+      a {
+        display: inline-block;
+        margin-top: 22px;
+        padding: 12px 18px;
+        border-radius: 12px;
+        border: 1px solid #ffffff;
+        background: #ffffff;
+        color: #050505;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      @media (max-width: 680px) {
+        .status-row {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="card">
+        <p class="eyebrow">DDO Animation</p>
+        <h1 style="margin:0;">DDO Status Bar</h1>
+        <p style="margin:14px 0 0;color:#c9c9c9;line-height:1.75;">
+          This local DDO page replaces the old EXE download flow. It presents a clean
+          preview of a compact status-bar style utility experience inside your website.
+        </p>
+
+        <div class="status-bar">
+          <div class="status-row">
+            <strong>System Health</strong>
+            <span class="pill"><span class="dot"></span> Stable</span>
+          </div>
+          <div class="status-row">
+            <strong>Company Requests</strong>
+            <span>12 active reviews</span>
+          </div>
+          <div class="status-row">
+            <strong>Last Sync</strong>
+            <span>Today, 10:32 AM</span>
+          </div>
+        </div>
+
+        <a href="/apps.html">Back to Apps</a>
+      </div>
+    </div>
+  </body>
+</html>
