@@ -8,34 +8,56 @@
   </head>
   <body>
     <main class="cfm-shell">
-      <aside class="sidebar">
-        <div>
-          <span class="sidebar-kicker">CFM</span>
-          <h1>Code File Manager</h1>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-top">
+          <div>
+            <span class="sidebar-kicker">CFM</span>
+            <h1>Code File Manager</h1>
+          </div>
+          <button type="button" class="icon-button" id="closeSidebarButton" aria-label="Close sidebar">
+            <span class="icon icon-close"></span>
+          </button>
         </div>
 
         <nav class="sidebar-nav" aria-label="CFM actions">
-          <button type="button" class="nav-item active">Add File</button>
-          <button type="button" class="nav-item">Add Folder</button>
-          <button type="button" class="nav-item">Open File</button>
-          <button type="button" class="nav-item">Rename File/Folder</button>
-          <button type="button" class="nav-item">Delete File/Folder</button>
-          <button type="button" class="nav-item">Upload File</button>
-          <button type="button" class="nav-item">Download File</button>
-          <button type="button" class="nav-item">Search File</button>
-          <button type="button" class="nav-item">Recent Files</button>
+          <button type="button" class="nav-item active" data-action="open">
+            <span class="icon icon-open"></span>
+            <span>Open File / Folder</span>
+          </button>
+          <button type="button" class="nav-item" data-action="delete">
+            <span class="icon icon-delete"></span>
+            <span>Delete File / Folder</span>
+          </button>
+          <button type="button" class="nav-item" data-action="search">
+            <span class="icon icon-search"></span>
+            <span>Search File</span>
+          </button>
+          <button type="button" class="nav-item" data-action="recent">
+            <span class="icon icon-recent"></span>
+            <span>Recent Files</span>
+          </button>
+          <button type="button" class="nav-item" data-action="settings">
+            <span class="icon icon-settings"></span>
+            <span>Settings</span>
+          </button>
         </nav>
       </aside>
 
+      <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
       <section class="workspace">
         <header class="workspace-header">
-          <div>
+          <div class="workspace-title">
+            <button type="button" class="icon-button menu-button" id="openSidebarButton" aria-label="Open sidebar">
+              <span class="icon icon-menu"></span>
+            </button>
+            <div>
             <p class="workspace-kicker">DDO Tool</p>
             <h2>Power by DDO</h2>
+            </div>
           </div>
 
           <div class="header-actions">
-            <button type="button" class="ghost-button" id="settingsButton">Settings</button>
             <button type="button" class="ghost-button" id="logoutButton">Logout</button>
           </div>
         </header>
@@ -44,27 +66,62 @@
           <div class="intro-copy">
             <h3>Welcome to CFM</h3>
             <p>
-              Manage code files, folders, uploads, and recent work from one DDO company
-              dashboard. The current version is a clean interface shell connected to your
-              existing company authentication system.
+              Manage code files and folders from one smaller, cleaner DDO workspace. Open,
+              search, delete, and review recent activity using the same company authentication system.
             </p>
           </div>
 
-          <div class="feature-grid">
-            <article class="feature-card">
-              <span class="feature-tag">Workspace</span>
-              <strong>File Controls</strong>
-              <p>Create, rename, remove, and organize code assets with a simple action list.</p>
+          <div class="control-grid">
+            <div class="action-card" id="openActionCard">
+              <div class="action-head">
+                <span class="feature-tag">Open</span>
+                <strong>Open File / Folder</strong>
+              </div>
+              <p>Select a local file or folder for preview, or open the safe DDO project workspace from the backend.</p>
+              <div class="action-buttons">
+                <button type="button" class="ghost-button compact" id="browseFileButton">Browse File</button>
+                <button type="button" class="ghost-button compact" id="browseFolderButton">Browse Folder</button>
+                <button type="button" class="ghost-button compact" id="openWorkspaceButton">Open Workspace</button>
+              </div>
+              <input type="file" id="localFileInput" class="hidden-input" />
+              <input type="file" id="localFolderInput" class="hidden-input" webkitdirectory directory multiple />
+            </div>
+
+            <div class="action-card" id="searchActionCard">
+              <div class="action-head">
+                <span class="feature-tag">Explorer</span>
+                <strong>Folder / Result View</strong>
+              </div>
+              <p>Use the explorer panel to search files, follow breadcrumbs, and browse a compact folder tree.</p>
+            </div>
+          </div>
+
+          <div class="content-grid">
+            <article class="content-card">
+              <div class="card-title-row">
+                <span class="feature-tag">Selected</span>
+                <strong id="selectedName">No file or folder selected</strong>
+              </div>
+              <p id="selectedMeta" class="muted-copy">Use the sidebar or open controls to load a file or folder.</p>
+              <div class="content-panel" id="previewPanel">Preview content will appear here.</div>
             </article>
-            <article class="feature-card">
-              <span class="feature-tag">Search</span>
-              <strong>Fast Access</strong>
-              <p>Search recent files and quickly jump between folders inside one manager view.</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-tag">Sync</span>
-              <strong>Upload & Download</strong>
-              <p>Handle incoming and outgoing file operations from a single sidebar workflow.</p>
+
+            <article class="content-card">
+              <div class="card-title-row">
+                <span class="feature-tag">Structure</span>
+                <strong>Folder / Result View</strong>
+              </div>
+              <div class="explorer-toolbar">
+                <div class="breadcrumb-path" id="breadcrumbPath">No folder opened yet</div>
+                <div class="tree-search-row">
+                  <input type="search" id="searchInput" placeholder="Search files" />
+                  <button type="button" class="ghost-button compact" id="searchButton">Search</button>
+                </div>
+              </div>
+              <div class="content-panel tree-panel" id="treePanel">
+                <div class="tree-empty-state" id="treeEmptyState">No folder opened yet</div>
+                <div class="tree-root" id="treeRoot"></div>
+              </div>
             </article>
           </div>
         </section>

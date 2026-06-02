@@ -36,6 +36,14 @@ const companySchema = new mongoose.Schema(
     approvalTokenExpires: { type: Date, default: null },
     resetPasswordToken: { type: String, default: "" },
     resetPasswordExpires: { type: Date, default: null },
+    recentFiles: [
+      {
+        targetPath: { type: String, default: "", trim: true },
+        itemType: { type: String, enum: ["file", "folder"], default: "file" },
+        action: { type: String, default: "open", trim: true },
+        lastAccessedAt: { type: Date, default: Date.now }
+      }
+    ],
     rejectionReason: { type: String, default: "", trim: true },
     approvedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null }
