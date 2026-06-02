@@ -1,488 +1,810 @@
 const API_BASE_URL = window.location.origin;
 const TOKEN_KEY = "ddoCompanyToken";
 const LOGIN_PATH = "./company-login.html";
+const THEME_KEY = "ddoCfmTheme";
 
-const shell = document.querySelector(".cfm-shell");
+const state = {
+  token: localStorage.getItem(TOKEN_KEY) || "",
+  company: null,
+  workspaceId: "",
+  workspaceLabel: "",
+  tree: [],
+  currentPath: "",
+  currentItemType: "",
+  currentContent: "",
+  currentItems: [],
+  searchResults: [],
+  recentFiles: [],
+  view: "empty",
+  viewHistory: [],
+  expandedPaths: new Set(),
+  privacyMode: "public",
+  hasPin: false,
+  pinTarget: "pin",
+};
+
+const allowedExtensions = [
+  ".html",
+  ".css",
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".json",
+  ".md",
+  ".txt",
+  ".py",
+  ".java",
+  ".cpp",
+  ".c",
+  ".php",
+];
+
+const successBanner = document.getElementById("successBanner");
+const errorBanner = document.getElementById("errorBanner");
 const sidebar = document.getElementById("sidebar");
-const sidebarBackdrop = document.getElementById("sidebarBackdrop");
-const openSidebarButton = document.getElementById("openSidebarButton");
-const closeSidebarButton = document.getElementById("closeSidebarButton");
-const companyName = document.getElementById("companyName");
-const companyEmail = document.getElementById("companyEmail");
-const companyPhone = document.getElementById("companyPhone");
-const companyWebsite = document.getElementById("companyWebsite");
-const companyStatus = document.getElementById("companyStatus");
-const selectedName = document.getElementById("selectedName");
-const selectedMeta = document.getElementById("selectedMeta");
-const previewPanel = document.getElementById("previewPanel");
-const treePanel = document.getElementById("treePanel");
 const treeRoot = document.getElementById("treeRoot");
-const treeEmptyState = document.getElementById("treeEmptyState");
+const resultPanel = document.getElementById("resultPanel");
 const breadcrumbPath = document.getElementById("breadcrumbPath");
+const workspaceMeta = document.getElementById("workspaceMeta");
 const searchInput = document.getElementById("searchInput");
-const searchButton = document.getElementById("searchButton");
-const openWorkspaceButton = document.getElementById("openWorkspaceButton");
-const browseFileButton = document.getElementById("browseFileButton");
-const browseFolderButton = document.getElementById("browseFolderButton");
-const localFileInput = document.getElementById("localFileInput");
-const localFolderInput = document.getElementById("localFolderInput");
-const logoutButton = document.getElementById("logoutButton");
-const navButtons = document.querySelectorAll(".nav-item");
+const goBackButton = document.getElementById("goBackButton");
+const fileInput = document.getElementById("fileInput");
+const folderInput = document.getElementById("folderInput");
+const uploadModal = document.getElementById("uploadModal");
+const companyInfoModal = document.getElementById("companyInfoModal");
+const settingsModal = document.getElementById("settingsModal");
+const pinSetupPanel = document.getElementById("pinSetupPanel");
+const pinVerifyPanel = document.getElementById("pinVerifyPanel");
+const companyDetailsPanel = document.getElementById("companyDetailsPanel");
+const profileName = document.getElementById("profileName");
+const profileMiniName = document.getElementById("profileMiniName");
+const profileAvatar = document.getElementById("profileAvatar");
+const companyIdValue = document.getElementById("companyIdValue");
+const companyStatusValue = document.getElementById("companyStatusValue");
+const companyEmailValue = document.getElementById("companyEmailValue");
+const publicModeButton = document.getElementById("publicModeButton");
+const privateModeButton = document.getElementById("privateModeButton");
+const pinValue = document.getElementById("pinValue");
+const confirmPinValue = document.getElementById("confirmPinValue");
+const verifyPinValue = document.getElementById("verifyPinValue");
+const pinTargetButton = document.getElementById("pinTargetButton");
+const confirmPinTargetButton = document.getElementById("confirmPinTargetButton");
+const themeSelect = document.getElementById("themeSelect");
 
-let currentSelectionPath = "";
-let currentSelectionType = "";
-const expandedFolders = new Set([""]);
+function showBanner(type, message) {
+  successBanner.classList.remove("show");
+  errorBanner.classList.remove("show");
 
-function redirectToLogin() {
-  window.location.href = LOGIN_PATH;
+  if (type === "success") {
+    successBanner.textContent = message;
+    successBanner.classList.add("show");
+  }
+
+  if (type === "error") {
+    errorBanner.textContent = message;
+    errorBanner.classList.add("show");
+  }
 }
 
-function getAuthHeaders() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
+function clearBanner() {
+  successBanner.classList.remove("show");
+  errorBanner.classList.remove("show");
+}
+
+function authHeaders(contentType) {
+  const headers = {
+    Authorization: `Bearer ${state.token}`,
   };
+
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
+
+  return headers;
 }
 
-function setSelectedState(title, meta, content = "") {
-  selectedName.textContent = title;
-  selectedMeta.textContent = meta;
-  previewPanel.textContent = content || "No preview available for the selected item.";
+async function apiRequest(url, options = {}) {
+  const response = await fetch(url, options);
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.message || "Request failed.");
+  }
+
+  return result;
 }
 
-function setBreadcrumb(pathValue = "") {
-  breadcrumbPath.textContent = pathValue ? pathValue.replace(/\//g, " / ") : "No folder opened yet";
+function setTheme(theme) {
+  const safeTheme = theme === "graphite" ? "graphite" : "vercel";
+  document.body.dataset.theme = safeTheme;
+  localStorage.setItem(THEME_KEY, safeTheme);
+  themeSelect.value = safeTheme;
 }
 
-function setSidebarOpen(isOpen) {
-  shell.classList.toggle("sidebar-open", isOpen);
-  if (window.innerWidth <= 900) {
-    shell.classList.remove("sidebar-collapsed");
+function setSidebarOpen(open) {
+  sidebar.classList.toggle("open", open);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function pushView(nextView) {
+  if (state.view !== nextView) {
+    state.viewHistory.push(state.view);
+    state.view = nextView;
   }
 }
 
-function setSidebarCollapsed(isCollapsed) {
-  if (window.innerWidth > 900) {
-    shell.classList.toggle("sidebar-collapsed", isCollapsed);
-  } else if (!isCollapsed) {
-    setSidebarOpen(true);
-  } else {
-    setSidebarOpen(false);
-  }
-}
-
-function setTreeEmpty(message) {
-  treeEmptyState.textContent = message;
-  treeEmptyState.style.display = "block";
-  treeRoot.innerHTML = "";
-}
-
-function renderTree(nodes = [], options = {}) {
-  if (!nodes.length) {
-    setTreeEmpty(options.emptyMessage || "No folder opened yet");
+function goBack() {
+  if (!state.viewHistory.length) {
     return;
   }
 
-  treeEmptyState.style.display = "none";
-  treeRoot.innerHTML = "";
-
-  const build = (items, depth = 0) => {
-    const list = document.createElement("ul");
-    list.className = depth === 0 ? "tree-root-list" : "tree-node-children";
-
-    items.forEach((item) => {
-      const listItem = document.createElement("li");
-      listItem.className = "tree-node";
-      if (item.itemType === "folder" && expandedFolders.has(item.relativePath || "")) {
-        listItem.classList.add("is-open");
-      }
-
-      const row = document.createElement("div");
-      row.className = "tree-row";
-
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "tree-toggle";
-
-      const label = document.createElement("button");
-      label.type = "button";
-      label.className = "tree-label";
-      if (currentSelectionPath === item.relativePath) {
-        label.classList.add("is-active");
-      }
-
-      const icon = document.createElement("span");
-      icon.className = `tree-icon ${item.itemType === "folder" ? "folder" : "file"}`;
-
-      const text = document.createElement("span");
-      text.textContent = item.name;
-
-      label.append(icon, text);
-
-      if (item.itemType === "folder") {
-        toggle.addEventListener("click", () => {
-          const folderKey = item.relativePath || "";
-          if (expandedFolders.has(folderKey)) {
-            expandedFolders.delete(folderKey);
-          } else {
-            expandedFolders.add(folderKey);
-          }
-          renderTree(nodes, options);
-        });
-
-        label.addEventListener("click", () => {
-          expandedFolders.add(item.relativePath || "");
-          openServerTarget(item.relativePath);
-        });
-      } else {
-        toggle.classList.add("spacer");
-        toggle.setAttribute("aria-hidden", "true");
-        label.addEventListener("click", () => openServerTarget(item.relativePath));
-      }
-
-      row.append(toggle, label);
-
-      if (options.mode === "recent" && item.action) {
-        const meta = document.createElement("span");
-        meta.className = "tree-result-meta";
-        meta.textContent = item.action;
-        row.append(meta);
-      }
-
-      listItem.appendChild(row);
-
-      if (item.itemType === "folder" && item.children?.length && expandedFolders.has(item.relativePath || "")) {
-        listItem.appendChild(build(item.children, depth + 1));
-      }
-
-      list.appendChild(listItem);
-    });
-
-    return list;
-  };
-
-  treeRoot.appendChild(build(nodes));
+  state.view = state.viewHistory.pop();
+  renderResultPanel();
 }
 
-function makeSearchTree(results = []) {
-  return results.map((item) => ({
-    ...item,
-    children: [],
-  }));
+function fileIconSvg(type) {
+  if (type === "folder") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7a2 2 0 0 1 2-2h4l2 2"/></svg>';
+  }
+
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>';
 }
 
-function listToTree(items = []) {
-  const root = {};
+function toggleExpanded(path) {
+  if (state.expandedPaths.has(path)) {
+    state.expandedPaths.delete(path);
+  } else {
+    state.expandedPaths.add(path);
+  }
+  renderTree();
+}
 
-  items.forEach((item) => {
-    const parts = (item.relativePath || item.name).split("/").filter(Boolean);
-    let cursor = root;
+function buildBreadcrumb(pathValue) {
+  if (!pathValue) {
+    return state.workspaceLabel || "No folder opened yet";
+  }
 
-    parts.forEach((part, index) => {
-      const relativePath = parts.slice(0, index + 1).join("/");
-      const isFile = index === parts.length - 1;
-      if (!cursor[part]) {
-        cursor[part] = {
-          name: part,
-          relativePath,
-          itemType: isFile ? "file" : "folder",
-          childrenMap: {},
-        };
-      }
-      cursor = cursor[part].childrenMap;
+  const parts = [state.workspaceLabel || "Workspace", ...pathValue.split("/").filter(Boolean)];
+  return parts.join(" / ");
+}
+
+function formatRecentTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Date(value).toLocaleString("en-IN");
+}
+
+function setActiveNav(buttonId) {
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.id === buttonId);
+  });
+}
+
+function renderTreeNodes(nodes, depth = 0) {
+  if (!nodes?.length) {
+    return '<div class="empty-state">No folder opened yet</div>';
+  }
+
+  return nodes
+    .map((node) => {
+      const isFolder = node.itemType === "folder";
+      const isExpanded = isFolder && (depth === 0 || state.expandedPaths.has(node.relativePath));
+      const childrenClass = isExpanded ? "tree-children open" : "tree-children";
+      const activeClass = state.currentPath === node.relativePath ? "active" : "";
+
+      return `
+        <div class="tree-node">
+          <div class="tree-row ${activeClass}" data-path="${escapeHtml(node.relativePath)}" data-type="${node.itemType}">
+            <button class="tree-toggle ${isFolder ? "" : "placeholder"}" type="button" data-toggle="${escapeHtml(node.relativePath)}">
+              ${isFolder ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"></svg>'}
+            </button>
+            <span class="tree-icon">${fileIconSvg(node.itemType)}</span>
+            <span>${escapeHtml(node.name)}</span>
+          </div>
+          ${isFolder ? `<div class="${childrenClass}">${renderTreeNodes(node.children || [], depth + 1)}</div>` : ""}
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderTree() {
+  treeRoot.innerHTML = renderTreeNodes(state.tree);
+
+  treeRoot.querySelectorAll("[data-toggle]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleExpanded(button.getAttribute("data-toggle"));
     });
   });
 
-  const convert = (map) =>
-    Object.values(map)
-      .sort((left, right) => Number(right.itemType === "folder") - Number(left.itemType === "folder") || left.name.localeCompare(right.name))
-      .map((node) => ({
-        name: node.name,
-        relativePath: node.relativePath,
-        itemType: node.itemType,
-        children: convert(node.childrenMap),
-      }));
+  treeRoot.querySelectorAll(".tree-row").forEach((row) => {
+    row.addEventListener("click", async () => {
+      const targetPath = row.dataset.path || "";
+      const itemType = row.dataset.type || "file";
 
-  return convert(root);
+      if (itemType === "folder") {
+        state.expandedPaths.add(targetPath);
+      }
+
+      await openWorkspaceTarget(targetPath);
+    });
+  });
 }
 
-async function saveRecent(targetPath, itemType, action) {
-  try {
-    await fetch(`${API_BASE_URL}/api/cfm/recent`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ targetPath, itemType, action }),
-    });
-  } catch (_error) {
-    // Recent activity is non-blocking for the UI.
+function renderFolderItems(items) {
+  if (!items?.length) {
+    return '<div class="empty-state">This folder is empty.</div>';
   }
+
+  return `
+    <div class="result-list">
+      ${items
+        .map(
+          (item) => `
+            <button class="result-item" data-open-path="${escapeHtml(item.relativePath)}" data-open-type="${item.itemType}" type="button">
+              <div>
+                <span class="result-name">${escapeHtml(item.name)}</span>
+                <span class="result-path">${escapeHtml(item.relativePath)}</span>
+              </div>
+              <span class="result-type">${item.itemType}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderSearchResults() {
+  if (!state.searchResults.length) {
+    return '<div class="empty-state">No files matched your search.</div>';
+  }
+
+  return `
+    <div class="result-list">
+      ${state.searchResults
+        .map(
+          (item) => `
+            <button class="result-item" data-open-path="${escapeHtml(item.relativePath)}" data-open-type="${item.itemType}" type="button">
+              <div>
+                <span class="result-name">${escapeHtml(item.name)}</span>
+                <span class="result-path">${escapeHtml(item.relativePath)}</span>
+              </div>
+              <span class="result-type">${item.itemType}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderRecentResults() {
+  if (!state.recentFiles.length) {
+    return '<div class="empty-state">No recent files yet.</div>';
+  }
+
+  return `
+    <div class="result-list">
+      ${state.recentFiles
+        .map(
+          (item) => `
+            <button class="result-item" data-open-path="${escapeHtml(item.targetPath)}" data-open-type="${item.itemType}" type="button">
+              <div>
+                <span class="result-name">${escapeHtml(item.targetPath)}</span>
+                <span class="result-path">${escapeHtml(formatRecentTime(item.lastAccessedAt))}</span>
+              </div>
+              <span class="result-type">${escapeHtml(item.action || item.itemType)}</span>
+            </button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderFilePreview() {
+  const preview = state.currentContent
+    ? `<pre class="code-preview">${escapeHtml(state.currentContent)}</pre>`
+    : '<div class="empty-state">Preview is not available for this file.</div>';
+
+  return `
+    <div class="result-list">
+      <div class="result-item">
+        <div>
+          <span class="result-name">${escapeHtml(state.currentPath.split("/").pop() || "File preview")}</span>
+          <span class="result-path">${escapeHtml(state.currentPath)}</span>
+        </div>
+        <span class="result-type">file</span>
+      </div>
+      ${preview}
+    </div>
+  `;
+}
+
+function renderResultPanel() {
+  breadcrumbPath.textContent = buildBreadcrumb(state.currentPath);
+
+  if (state.view === "search") {
+    resultPanel.innerHTML = renderSearchResults();
+  } else if (state.view === "recent") {
+    resultPanel.innerHTML = renderRecentResults();
+  } else if (state.view === "file") {
+    resultPanel.innerHTML = renderFilePreview();
+  } else if (state.view === "workspace" && state.currentItemType === "folder") {
+    resultPanel.innerHTML = renderFolderItems(state.currentItems);
+  } else {
+    resultPanel.innerHTML = '<div class="empty-state">No folder opened yet</div>';
+  }
+
+  resultPanel.querySelectorAll("[data-open-path]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openWorkspaceTarget(button.dataset.openPath || "");
+    });
+  });
+}
+
+function renderCompany(company) {
+  state.company = company;
+  profileName.textContent = company.companyName || "DDO Company";
+  profileMiniName.textContent = company.companyName || "DDO Company";
+  companyIdValue.textContent = company.companyId || "-";
+  companyStatusValue.textContent = company.status || "-";
+  companyEmailValue.textContent = company.companyEmail || "-";
+  profileAvatar.textContent = (company.companyName || "DD").slice(0, 2).toUpperCase();
 }
 
 async function loadCompanyProfile() {
-  const token = localStorage.getItem(TOKEN_KEY);
-  if (!token) {
-    redirectToLogin();
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/company/me`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Session expired.");
-    }
-
-    companyName.textContent = payload.companyName || "-";
-    companyEmail.textContent = payload.companyEmail || "-";
-    companyPhone.textContent = payload.companyPhone || "-";
-    companyWebsite.textContent = payload.companyWebsite || "-";
-    companyStatus.textContent = payload.status || "-";
-  } catch (_error) {
-    localStorage.removeItem(TOKEN_KEY);
-    redirectToLogin();
-  }
-}
-
-async function openServerTarget(targetPath = "") {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/cfm/open?target=${encodeURIComponent(targetPath)}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
-      },
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Failed to open file or folder.");
-    }
-
-    currentSelectionPath = payload.targetPath;
-    currentSelectionType = payload.itemType;
-
-    if (payload.itemType === "folder") {
-      expandedFolders.add(payload.targetPath || "");
-      setSelectedState(
-        payload.targetPath || "Project Root",
-        `${payload.items.length} items in folder`,
-        `Opened folder: ${payload.targetPath || "Project Root"}`
-      );
-      setBreadcrumb(payload.targetPath || "CFM");
-      renderTree(payload.tree || payload.items || [], { emptyMessage: "No folder opened yet" });
-    } else {
-      setSelectedState(
-        payload.fileName || payload.targetPath,
-        payload.previewAvailable
-          ? `${payload.extension || "text"} preview available`
-          : `Preview not available for ${payload.extension || "this file type"}`,
-        payload.content || ""
-      );
-      setBreadcrumb(payload.targetPath.split("/").slice(0, -1).join("/") || "CFM");
-    }
-  } catch (error) {
-    setSelectedState("Unable to open item", error.message || "Open failed.");
-    setTreeEmpty("Try selecting a different file or folder.");
-  }
+  const company = await apiRequest(`${API_BASE_URL}/api/company/me`, {
+    headers: authHeaders(),
+  });
+  renderCompany(company);
 }
 
 async function loadRecentFiles() {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/cfm/recent`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
-      },
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Failed to load recent files.");
-    }
-
-    const recentItems = payload.recentFiles || [];
-    if (!recentItems.length) {
-      setTreeEmpty("No recent file activity yet");
-      return;
-    }
-
-    renderTree(
-      recentItems.map((item) => ({
-        name: item.targetPath.split("/").pop() || item.targetPath,
-        relativePath: item.targetPath,
-        itemType: item.itemType || "file",
-        action: item.action || "open",
-        children: [],
-      })),
-      { mode: "recent", emptyMessage: "No recent file activity yet" }
-    );
-    selectedName.textContent = "Recent Files";
-    selectedMeta.textContent = "Latest company CFM activity";
-    previewPanel.textContent = "Pick a recent file or folder from the list to reopen it.";
-    setBreadcrumb("Recent Files");
-  } catch (error) {
-    setTreeEmpty(error.message || "Unable to load recent files.");
-  }
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
+    headers: authHeaders(),
+  });
+  state.recentFiles = result.recentFiles || [];
 }
 
-async function searchFiles() {
-  const query = searchInput.value.trim();
-  if (!query) {
-    selectedName.textContent = "Search File";
-    selectedMeta.textContent = "Enter a file or folder name to search.";
-    return;
-  }
-
+async function saveRecentActivity(targetPath, itemType, action) {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/cfm/search?q=${encodeURIComponent(query)}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem(TOKEN_KEY)}`,
-      },
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Search failed.");
-    }
-
-    const results = payload.results || [];
-    selectedName.textContent = "Search File";
-    selectedMeta.textContent = `${results.length} result(s) found for "${query}"`;
-    previewPanel.textContent = "Choose a result from the list to open it.";
-    setBreadcrumb(`Search / ${query}`);
-    renderTree(makeSearchTree(results), { emptyMessage: "No matching files found." });
-  } catch (error) {
-    selectedName.textContent = "Search File";
-    selectedMeta.textContent = error.message || "Search failed.";
-    setTreeEmpty("No search results available.");
-  }
-}
-
-async function deleteCurrentSelection() {
-  if (!currentSelectionPath) {
-    selectedName.textContent = "Delete File / Folder";
-    selectedMeta.textContent = "Open a file or folder first, then delete it.";
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/cfm/delete`, {
+    await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
       method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ targetPath: currentSelectionPath }),
+      headers: authHeaders("application/json"),
+      body: JSON.stringify({ targetPath, itemType, action }),
     });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.message || "Delete failed.");
-    }
-
-    await saveRecent(currentSelectionPath, currentSelectionType || "file", "delete");
-    currentSelectionPath = "";
-    currentSelectionType = "";
-    setSelectedState("Delete File / Folder", payload.message, "");
-    setTreeEmpty("Item deleted successfully. Open another file or folder to continue.");
-    setBreadcrumb("");
-  } catch (error) {
-    selectedName.textContent = "Delete File / Folder";
-    selectedMeta.textContent = error.message || "Delete failed.";
+  } catch (_error) {
+    // Keep the UI moving even if the recent save fails.
   }
 }
 
-function previewLocalFile(file) {
-  currentSelectionPath = file.name;
-  currentSelectionType = "file";
+async function openWorkspaceTarget(targetPath = "") {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a file or folder first.");
+    return;
+  }
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    setSelectedState(file.name, `Local file preview (${file.type || "text"})`, String(reader.result || ""));
-    setBreadcrumb(file.name);
-    setTreeEmpty("Local file selected. Use the explorer to browse backend project files too.");
-  };
-  reader.readAsText(file);
+  clearBanner();
+  const params = new URLSearchParams({
+    workspaceId: state.workspaceId,
+    target: targetPath,
+  });
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/open?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  state.currentPath = result.targetPath || "";
+  state.currentItemType = result.itemType || "";
+  state.currentItems = result.items || [];
+  state.currentContent = result.content || "";
+
+  if (result.tree && !state.currentPath) {
+    state.tree = result.tree;
+  }
+
+  pushView(result.itemType === "file" ? "file" : "workspace");
+  renderTree();
+  renderResultPanel();
 }
 
-function previewLocalFolder(files) {
-  const items = [...files].map((file) => ({
-    name: file.name,
-    relativePath: file.webkitRelativePath || file.name,
-    itemType: "file",
-  }));
+async function uploadWorkspace(files, relativePaths) {
+  clearBanner();
+  const formData = new FormData();
 
-  currentSelectionPath = items[0]?.relativePath?.split("/")[0] || "Local Folder";
-  currentSelectionType = "folder";
-  setSelectedState(currentSelectionPath, `${items.length} local file(s) in folder`, `Opened local folder: ${currentSelectionPath}`);
-  setBreadcrumb(currentSelectionPath);
-  renderTree(listToTree(items), { emptyMessage: "No folder opened yet" });
+  files.forEach((file, index) => {
+    formData.append("workspaceFiles", file);
+    formData.append("relativePaths", relativePaths[index]);
+  });
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/workspace/upload`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+
+  state.workspaceId = result.workspaceId;
+  state.workspaceLabel = result.workspaceLabel || "Uploaded workspace";
+  state.tree = result.tree || [];
+  state.currentPath = "";
+  state.currentItems = result.items || [];
+  state.currentItemType = "folder";
+  state.currentContent = "";
+  state.searchResults = [];
+  state.viewHistory = [];
+  state.expandedPaths = new Set();
+
+  pushView("workspace");
+  renderTree();
+  renderResultPanel();
+  workspaceMeta.textContent = `${state.workspaceLabel} is loaded with coding files only.`;
+  setActiveNav("openWorkspaceButton");
+  showBanner("success", result.message || "Workspace uploaded successfully.");
+  closeModal(uploadModal);
+  await loadRecentFiles();
 }
 
-logoutButton.addEventListener("click", () => {
-  localStorage.removeItem(TOKEN_KEY);
-  redirectToLogin();
-});
+async function handleFileSelection(fileList, isFolderMode) {
+  const files = Array.from(fileList || []);
+  if (!files.length) {
+    return;
+  }
 
-openSidebarButton.addEventListener("click", () => setSidebarCollapsed(false));
-closeSidebarButton.addEventListener("click", () => setSidebarCollapsed(true));
-sidebarBackdrop.addEventListener("click", () => setSidebarOpen(false));
+  const allowedFiles = [];
+  const relativePaths = [];
 
-navButtons.forEach((button) => {
-  button.addEventListener("click", async () => {
-    navButtons.forEach((navButton) => navButton.classList.remove("active"));
-    button.classList.add("active");
-    const action = button.dataset.action;
+  files.forEach((file) => {
+    const relativePath = isFolderMode ? file.webkitRelativePath || file.name : file.name;
+    const lowerPath = relativePath.toLowerCase();
+    const allowed = lowerPath.endsWith(".env.example") || allowedExtensions.some((ext) => lowerPath.endsWith(ext));
 
-    if (action === "open") {
-      await openServerTarget("");
-    }
-
-    if (action === "delete") {
-      await deleteCurrentSelection();
-    }
-
-    if (action === "search") {
-      searchInput.focus();
-    }
-
-    if (action === "recent") {
-      await loadRecentFiles();
-    }
-
-    if (action === "settings") {
-      selectedName.textContent = "Settings";
-      selectedMeta.textContent = "CFM settings panel";
-      previewPanel.textContent = "Settings can be extended here for theme, view mode, or file preferences.";
-      setTreeEmpty("No extra settings have been configured yet.");
-      setBreadcrumb("Settings");
+    if (allowed) {
+      allowedFiles.push(file);
+      relativePaths.push(relativePath);
     }
   });
-});
 
-openWorkspaceButton.addEventListener("click", () => openServerTarget(""));
-browseFileButton.addEventListener("click", () => localFileInput.click());
-browseFolderButton.addEventListener("click", () => localFolderInput.click());
-searchButton.addEventListener("click", searchFiles);
-searchInput.addEventListener("keydown", (event) => {
+  if (!allowedFiles.length) {
+    showBanner("error", "Choose coding files like .html, .css, .js, .json, .md, .py, or .php.");
+    return;
+  }
+
+  await uploadWorkspace(allowedFiles, relativePaths);
+}
+
+async function runSearch() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a file or folder first.");
+    return;
+  }
+
+  const query = searchInput.value.trim();
+  if (!query) {
+    showBanner("error", "Enter a file name to search.");
+    return;
+  }
+
+  const params = new URLSearchParams({
+    workspaceId: state.workspaceId,
+    q: query,
+  });
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/search?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  state.searchResults = result.results || [];
+  pushView("search");
+  renderResultPanel();
+  setActiveNav("searchFilesButton");
+}
+
+async function showRecentFiles() {
+  await loadRecentFiles();
+  pushView("recent");
+  renderResultPanel();
+  setActiveNav("recentFilesButton");
+}
+
+function openModal(modal) {
+  modal.classList.remove("hidden");
+}
+
+function closeModal(modal) {
+  modal.classList.add("hidden");
+}
+
+async function loadPrivacyStatus() {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/privacy`, {
+    headers: authHeaders(),
+  });
+
+  state.privacyMode = result.privacyMode || "public";
+  state.hasPin = Boolean(result.hasPin);
+  publicModeButton.classList.toggle("active-mode", state.privacyMode === "public");
+  privateModeButton.classList.toggle("active-mode", state.privacyMode === "private");
+}
+
+function resetPinInputs() {
+  pinValue.value = "";
+  confirmPinValue.value = "";
+  verifyPinValue.value = "";
+  state.pinTarget = "pin";
+  pinTargetButton.classList.add("active-target");
+  confirmPinTargetButton.classList.remove("active-target");
+}
+
+function showCompanyInfoPanel(mode) {
+  pinSetupPanel.classList.toggle("hidden", mode !== "setup");
+  pinVerifyPanel.classList.toggle("hidden", mode !== "verify");
+  companyDetailsPanel.classList.toggle("hidden", mode !== "details");
+}
+
+function renderCompanyDetails(company) {
+  companyDetailsPanel.innerHTML = `
+    <div class="details-grid">
+      <div class="details-item"><span>Company name</span><strong>${escapeHtml(company.companyName)}</strong></div>
+      <div class="details-item"><span>Company ID</span><strong>${escapeHtml(company.companyId)}</strong></div>
+      <div class="details-item"><span>Company email</span><strong>${escapeHtml(company.companyEmail)}</strong></div>
+      <div class="details-item"><span>Company phone</span><strong>${escapeHtml(company.companyPhone)}</strong></div>
+      <div class="details-item"><span>Company website</span><strong>${escapeHtml(company.companyWebsite)}</strong></div>
+      <div class="details-item"><span>Status</span><strong>${escapeHtml(company.status)}</strong></div>
+      <div class="details-item"><span>Person name</span><strong>${escapeHtml(company.personName)}</strong></div>
+      <div class="details-item"><span>Person email</span><strong>${escapeHtml(company.personEmail)}</strong></div>
+      <div class="details-item"><span>Person phone</span><strong>${escapeHtml(company.personPhone)}</strong></div>
+    </div>
+  `;
+}
+
+async function openCompanyInfo() {
+  clearBanner();
+  await loadPrivacyStatus();
+  resetPinInputs();
+  openModal(companyInfoModal);
+  setActiveNav("companyInfoButton");
+
+  if (state.privacyMode === "public") {
+    const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info`, {
+      headers: authHeaders(),
+    });
+    renderCompanyDetails(result.company);
+    showCompanyInfoPanel("details");
+  } else if (state.hasPin) {
+    showCompanyInfoPanel("verify");
+  } else {
+    showCompanyInfoPanel("setup");
+  }
+}
+
+async function savePrivacyMode(mode) {
+  const payload = { privacyMode: mode };
+
+  if (mode === "private") {
+    payload.pin = pinValue.value;
+    payload.confirmPin = confirmPinValue.value;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/privacy`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify(payload),
+  });
+
+  state.privacyMode = result.privacyMode;
+  state.hasPin = Boolean(result.hasPin);
+  showBanner("success", result.message);
+
+  if (state.privacyMode === "public") {
+    const info = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info`, {
+      headers: authHeaders(),
+    });
+    renderCompanyDetails(info.company);
+    showCompanyInfoPanel("details");
+  } else {
+    resetPinInputs();
+    showCompanyInfoPanel("verify");
+  }
+}
+
+async function verifyAndOpenCompanyInfo() {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/access`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({ pin: verifyPinValue.value }),
+  });
+
+  renderCompanyDetails(result.company);
+  showCompanyInfoPanel("details");
+  verifyPinValue.value = "";
+  showBanner("success", "Company info unlocked successfully.");
+}
+
+function appendPinValue(value) {
+  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
+  if (target.value.length >= 8) {
+    return;
+  }
+  target.value += value;
+}
+
+function backspacePinValue() {
+  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
+  target.value = target.value.slice(0, -1);
+}
+
+function clearPinValue() {
+  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
+  target.value = "";
+}
+
+function buildPinPad(container, onDigit, onSubmit) {
+  container.innerHTML = "";
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "Backspace", "Submit"];
+
+  keys.forEach((key) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "pin-key";
+    button.textContent = key;
+    button.addEventListener("click", async () => {
+      if (/^\d$/.test(key)) {
+        onDigit(key);
+        return;
+      }
+
+      if (key === "Clear") {
+        clearPinValue();
+        return;
+      }
+
+      if (key === "Backspace") {
+        backspacePinValue();
+        return;
+      }
+
+      await onSubmit();
+    });
+    container.appendChild(button);
+  });
+}
+
+async function clearRecentFiles() {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  state.recentFiles = [];
+  if (state.view === "recent") {
+    renderResultPanel();
+  }
+  showBanner("success", result.message || "Recent files cleared successfully.");
+}
+
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  window.location.href = LOGIN_PATH;
+}
+
+async function initializeDashboard() {
+  if (!state.token) {
+    window.location.href = LOGIN_PATH;
+    return;
+  }
+
+  setTheme(localStorage.getItem(THEME_KEY) || "vercel");
+
+  try {
+    await loadCompanyProfile();
+    await loadRecentFiles();
+    renderTree();
+    renderResultPanel();
+  } catch (error) {
+    localStorage.removeItem(TOKEN_KEY);
+    showBanner("error", error.message || "Session expired.");
+    window.location.href = LOGIN_PATH;
+  }
+}
+
+document.getElementById("openSidebarButton").addEventListener("click", () => setSidebarOpen(true));
+document.getElementById("closeSidebarButton").addEventListener("click", () => setSidebarOpen(false));
+document.getElementById("openWorkspaceButton").addEventListener("click", () => {
+  openModal(uploadModal);
+  setActiveNav("openWorkspaceButton");
+});
+document.getElementById("closeUploadModalButton").addEventListener("click", () => closeModal(uploadModal));
+document.getElementById("selectFilesButton").addEventListener("click", () => fileInput.click());
+document.getElementById("selectFolderButton").addEventListener("click", () => folderInput.click());
+fileInput.addEventListener("change", async () => handleFileSelection(fileInput.files, false));
+folderInput.addEventListener("change", async () => handleFileSelection(folderInput.files, true));
+
+document.getElementById("searchFilesButton").addEventListener("click", async () => {
+  setActiveNav("searchFilesButton");
+  searchInput.focus();
+});
+document.getElementById("searchSubmitButton").addEventListener("click", runSearch);
+searchInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    searchFiles();
+    await runSearch();
   }
 });
 
-localFileInput.addEventListener("change", () => {
-  const file = localFileInput.files?.[0];
-  if (file) {
-    previewLocalFile(file);
+document.getElementById("recentFilesButton").addEventListener("click", showRecentFiles);
+document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
+document.getElementById("headerCompanyInfoButton").addEventListener("click", openCompanyInfo);
+document.getElementById("closeCompanyInfoModalButton").addEventListener("click", () => closeModal(companyInfoModal));
+document.getElementById("settingsButton").addEventListener("click", () => openModal(settingsModal));
+document.getElementById("headerSettingsButton").addEventListener("click", () => openModal(settingsModal));
+document.getElementById("closeSettingsModalButton").addEventListener("click", () => closeModal(settingsModal));
+document.getElementById("settingsCompanyPrivacyButton").addEventListener("click", async () => {
+  closeModal(settingsModal);
+  await openCompanyInfo();
+});
+document.getElementById("clearRecentFilesButton").addEventListener("click", clearRecentFiles);
+document.getElementById("settingsLogoutButton").addEventListener("click", logout);
+document.getElementById("logoutButton").addEventListener("click", logout);
+goBackButton.addEventListener("click", goBack);
+
+themeSelect.addEventListener("change", () => {
+  setTheme(themeSelect.value);
+  showBanner("success", "Theme updated successfully.");
+});
+
+publicModeButton.addEventListener("click", async () => {
+  await savePrivacyMode("public");
+});
+
+privateModeButton.addEventListener("click", () => {
+  showCompanyInfoPanel("setup");
+});
+
+pinTargetButton.addEventListener("click", () => {
+  state.pinTarget = "pin";
+  pinTargetButton.classList.add("active-target");
+  confirmPinTargetButton.classList.remove("active-target");
+});
+
+confirmPinTargetButton.addEventListener("click", () => {
+  state.pinTarget = "confirm";
+  confirmPinTargetButton.classList.add("active-target");
+  pinTargetButton.classList.remove("active-target");
+});
+
+buildPinPad(document.getElementById("pinPad"), appendPinValue, async () => {
+  await savePrivacyMode("private");
+});
+
+buildPinPad(document.getElementById("verifyPinPad"), (digit) => {
+  if (verifyPinValue.value.length < 8) {
+    verifyPinValue.value += digit;
+  }
+}, async () => {
+  await verifyAndOpenCompanyInfo();
+});
+
+window.addEventListener("click", (event) => {
+  if (event.target === uploadModal) {
+    closeModal(uploadModal);
+  }
+  if (event.target === companyInfoModal) {
+    closeModal(companyInfoModal);
+  }
+  if (event.target === settingsModal) {
+    closeModal(settingsModal);
   }
 });
 
-localFolderInput.addEventListener("change", () => {
-  if (localFolderInput.files?.length) {
-    previewLocalFolder(localFolderInput.files);
-  }
-});
-
-loadCompanyProfile();
-openServerTarget("");
+initializeDashboard();

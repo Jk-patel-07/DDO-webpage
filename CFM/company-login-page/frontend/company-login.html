@@ -7,71 +7,49 @@
     <link rel="stylesheet" href="./company-login.css" />
   </head>
   <body>
-    <main class="login-page">
-      <section class="login-shell" aria-labelledby="company-login-title">
-        <div class="login-card">
-          <div class="brand-copy">
-            <span class="brand-kicker">CFM Access</span>
-            <h1 id="company-login-title">Code File Manager Login</h1>
-            <p>
-              Sign in with your approved company credentials to continue to the
-              DDO Code File Manager.
-            </p>
-          </div>
-
-          <form id="company-login-form" class="login-form" novalidate>
-            <label class="field-group">
-              <span>Company ID</span>
-              <input
-                type="text"
-                id="companyId"
-                name="companyId"
-                placeholder="Enter company ID"
-                autocomplete="username"
-                maxlength="120"
-              />
-            </label>
-
-            <label class="field-group">
-              <span>Company Key</span>
-              <input
-                type="text"
-                id="companyKey"
-                name="companyKey"
-                placeholder="Enter company key"
-                autocomplete="off"
-                maxlength="160"
-              />
-            </label>
-
-            <label class="field-group">
-              <span>Company Password</span>
-              <div class="password-row">
-                <input
-                  type="password"
-                  id="companyPassword"
-                  name="companyPassword"
-                  placeholder="Enter company password"
-                  autocomplete="current-password"
-                />
-                <button type="button" id="toggle-password" class="ghost-button">
-                  Show
-                </button>
-              </div>
-            </label>
-
-            <p id="form-message" class="form-message" role="alert" aria-live="polite"></p>
-
-            <button type="submit" id="login-button" class="primary-button">
-              Login
-            </button>
-          </form>
-
-          <a class="back-link" href="/">Back to DDO Website</a>
-          <p class="powered-by">Power by DDO</p>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">DDO CFM</p>
+          <h1>Code File Manager login</h1>
+          <p class="hero-copy">
+            Use your approved company login to open the DDO Code File Manager.
+          </p>
         </div>
+        <a class="nav-link" href="/">Back to DDO Home</a>
+      </header>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <p class="section-label">Secure Access</p>
+            <h2>Company Login</h2>
+          </div>
+        </div>
+
+        <div class="banner success" id="successBanner" role="status" aria-live="polite"></div>
+        <div class="banner error" id="errorBanner" role="alert" aria-live="assertive"></div>
+
+        <form id="companyLoginForm" novalidate>
+          <label class="field">
+            <span>Company ID</span>
+            <input type="text" id="companyId" name="companyId" />
+          </label>
+          <label class="field">
+            <span>Company Key</span>
+            <input type="text" id="companyKey" name="companyKey" />
+          </label>
+          <label class="field">
+            <span>Company Password</span>
+            <input type="password" id="companyPassword" name="companyPassword" />
+          </label>
+          <div class="button-row">
+            <button type="submit" id="loginButton">Login to CFM</button>
+            <button type="button" class="secondary" id="forgotPasswordButton">Forgot password</button>
+          </div>
+        </form>
       </section>
-    </main>
+    </div>
 
     <script src="./company-login.js"></script>
   </body>

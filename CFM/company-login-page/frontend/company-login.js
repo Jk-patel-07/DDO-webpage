@@ -1,86 +1,88 @@
 const API_BASE_URL = window.location.origin;
-const LOGIN_ENDPOINT = `${API_BASE_URL}/api/company/login`;
-const REDIRECT_PATH = "./cfm-dashboard.html";
 const TOKEN_KEY = "ddoCompanyToken";
+const DASHBOARD_PATH = "./cfm-dashboard.html";
 
-const form = document.getElementById("company-login-form");
-const companyIdInput = document.getElementById("companyId");
-const companyKeyInput = document.getElementById("companyKey");
-const companyPasswordInput = document.getElementById("companyPassword");
-const togglePasswordButton = document.getElementById("toggle-password");
-const loginButton = document.getElementById("login-button");
-const formMessage = document.getElementById("form-message");
+const loginForm = document.getElementById("companyLoginForm");
+const loginButton = document.getElementById("loginButton");
+const forgotPasswordButton = document.getElementById("forgotPasswordButton");
+const successBanner = document.getElementById("successBanner");
+const errorBanner = document.getElementById("errorBanner");
 
-function setMessage(message, type = "") {
-  formMessage.textContent = message;
-  formMessage.className = "form-message";
+function showBanner(type, message) {
+  successBanner.classList.remove("show");
+  errorBanner.classList.remove("show");
 
-  if (type) {
-    formMessage.classList.add(type);
+  if (type === "success") {
+    successBanner.textContent = message;
+    successBanner.classList.add("show");
+  }
+
+  if (type === "error") {
+    errorBanner.textContent = message;
+    errorBanner.classList.add("show");
   }
 }
 
-function toggleLoadingState(isLoading) {
-  loginButton.disabled = isLoading;
-  loginButton.textContent = isLoading ? "Logging in..." : "Login";
-}
-
-function getTrimmedValue(input) {
-  return input.value.trim();
-}
-
-togglePasswordButton.addEventListener("click", () => {
-  const isPassword = companyPasswordInput.type === "password";
-  companyPasswordInput.type = isPassword ? "text" : "password";
-  togglePasswordButton.textContent = isPassword ? "Hide" : "Show";
-});
-
-form.addEventListener("submit", async (event) => {
+loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  showBanner();
+  loginButton.disabled = true;
+  loginButton.textContent = "Logging in...";
 
-  const companyId = getTrimmedValue(companyIdInput);
-  const companyKey = getTrimmedValue(companyKeyInput);
-  const companyPassword = companyPasswordInput.value;
-
-  if (!companyId || !companyKey || !companyPassword) {
-    setMessage("Please fill in Company ID, Company Key, and Company Password.", "error");
-    return;
-  }
-
-  setMessage("");
-  toggleLoadingState(true);
+  const payload = {
+    companyId: document.getElementById("companyId").value.trim(),
+    companyKey: document.getElementById("companyKey").value.trim(),
+    companyPassword: document.getElementById("companyPassword").value,
+  };
 
   try {
-    const response = await fetch(LOGIN_ENDPOINT, {
+    const response = await fetch(`${API_BASE_URL}/api/company/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        companyId,
-        companyKey,
-        companyPassword,
-      }),
+      body: JSON.stringify(payload),
     });
+    const result = await response.json();
 
-    const payload = await response.json().catch(() => ({
-      token: "",
-      message: "Unable to read server response.",
-    }));
-
-    if (!response.ok || !payload.token) {
-      throw new Error(payload.message || "Invalid company ID, key, or password");
+    if (!response.ok) {
+      throw new Error(result.message || "Login failed.");
     }
 
-    localStorage.setItem(TOKEN_KEY, payload.token);
-    setMessage(payload.message || "Company login successful", "success");
-
-    window.setTimeout(() => {
-      window.location.href = REDIRECT_PATH;
-    }, 700);
+    localStorage.setItem(TOKEN_KEY, result.token);
+    showBanner("success", "Company login successful.");
+    loginForm.reset();
+    window.location.href = DASHBOARD_PATH;
   } catch (error) {
-    setMessage(error.message || "Company login failed. Please try again.", "error");
+    showBanner("error", error.message || "Login failed.");
   } finally {
-    toggleLoadingState(false);
+    loginButton.disabled = false;
+    loginButton.textContent = "Login to CFM";
+  }
+});
+
+forgotPasswordButton?.addEventListener("click", async () => {
+  const companyEmail = window.prompt("Enter your registered company email:");
+  if (!companyEmail) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/company/forgot-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ companyEmail }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || "Password reset failed.");
+    }
+
+    showBanner("success", result.message || "Reset link sent to your company email.");
+  } catch (error) {
+    showBanner("error", error.message || "Password reset failed.");
   }
 });

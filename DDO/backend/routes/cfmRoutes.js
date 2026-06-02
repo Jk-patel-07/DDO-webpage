@@ -1,164 +1,140 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const multer = require("multer");
 const Company = require("../models/Company");
+const { authMiddleware, requireCompanyRole } = require("../middleware/companyAuth");
 
 const router = express.Router();
-const SAFE_ROOT = path.resolve(__dirname, "..", "..", "..");
+const workspaceUpload = multer({ storage: multer.memoryStorage(), limits: { files: 500, fileSize: 1024 * 1024 * 3 } });
+const WORKSPACE_ROOT = path.join(__dirname, "..", "uploads", "cfm-workspaces");
 const MAX_TEXT_PREVIEW_SIZE = 1024 * 1024;
-const MAX_SEARCH_RESULTS = 50;
-const TEXT_EXTENSIONS = new Set([
-  ".txt",
+const MAX_SEARCH_RESULTS = 75;
+const ALLOWED_EXTENSIONS = new Set([
+  ".html",
+  ".css",
   ".js",
   ".jsx",
   ".ts",
   ".tsx",
   ".json",
-  ".html",
-  ".css",
   ".md",
-  ".env",
-  ".yml",
-  ".yaml",
-  ".xml",
-  ".cjs",
-  ".mjs",
+  ".txt",
   ".py",
   ".java",
+  ".cpp",
+  ".c",
   ".php",
-  ".sql",
 ]);
 
-function authMiddleware(req, res, next) {
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
 
-  if (!token) {
-    return res.status(401).json({ message: "Authentication token is required." });
+function normalizeRelativePath(input = "") {
+  const normalized = String(input || "").replace(/\\/g, "/").replace(/^\/+/, "").trim();
+
+  if (!normalized || normalized.includes("..")) {
+    throw new Error("Invalid path.");
   }
 
-  try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    return next();
-  } catch (_error) {
-    return res.status(401).json({ message: "Invalid or expired token." });
-  }
+  return normalized
+    .split("/")
+    .filter(Boolean)
+    .join("/");
 }
 
-function requireCompanyRole(req, res, next) {
-  if (req.user?.role !== "company") {
-    return res.status(403).json({ message: "Only company accounts can access CFM." });
-  }
-  return next();
-}
+function isAllowedFile(relativePath) {
+  const lowerPath = relativePath.toLowerCase();
 
-function toRelativePath(targetPath = "") {
-  return String(targetPath || "")
-    .replace(/\\/g, "/")
-    .replace(/^\/+/, "")
-    .trim();
-}
-
-function resolveSafePath(targetPath = "") {
-  const relativePath = toRelativePath(targetPath);
-  const resolvedPath = path.resolve(SAFE_ROOT, relativePath);
-
-  if (!resolvedPath.startsWith(SAFE_ROOT)) {
-    throw new Error("Invalid path. Access outside the safe project folder is not allowed.");
+  if (lowerPath.endsWith(".env.example")) {
+    return true;
   }
 
-  return {
-    absolutePath: resolvedPath,
-    relativePath,
-  };
+  return ALLOWED_EXTENSIONS.has(path.extname(lowerPath));
 }
 
-function formatItem(baseRelativePath, dirent) {
-  const nextRelativePath = [baseRelativePath, dirent.name].filter(Boolean).join("/").replace(/\\/g, "/");
-  return {
-    name: dirent.name,
-    relativePath: nextRelativePath,
-    itemType: dirent.isDirectory() ? "folder" : "file",
-  };
+function getWorkspaceRoot(companyMongoId, workspaceId) {
+  const safeWorkspaceId = String(workspaceId || "").replace(/[^a-zA-Z0-9-_]/g, "");
+  if (!safeWorkspaceId) {
+    throw new Error("Workspace ID is required.");
+  }
+
+  return path.join(WORKSPACE_ROOT, String(companyMongoId), safeWorkspaceId);
 }
 
-function listDirectory(relativePath = "") {
-  const { absolutePath, relativePath: safeRelativePath } = resolveSafePath(relativePath);
-  const entries = fs
-    .readdirSync(absolutePath, { withFileTypes: true })
-    .filter((entry) => !entry.name.startsWith(".git"))
+function resolveWorkspacePath(companyMongoId, workspaceId, targetPath = "") {
+  const workspaceRoot = getWorkspaceRoot(companyMongoId, workspaceId);
+  const relativePath = targetPath ? normalizeRelativePath(targetPath) : "";
+  const absolutePath = path.resolve(workspaceRoot, relativePath);
+
+  if (!absolutePath.startsWith(workspaceRoot)) {
+    throw new Error("Invalid path.");
+  }
+
+  return { workspaceRoot, relativePath, absolutePath };
+}
+
+function listDirectoryTree(baseAbsolutePath, baseRelativePath = "") {
+  return fs
+    .readdirSync(baseAbsolutePath, { withFileTypes: true })
     .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
-    .map((entry) => formatItem(safeRelativePath, entry));
-
-  return {
-    targetPath: safeRelativePath,
-    itemType: "folder",
-    items: entries,
-  };
-}
-
-function buildFolderTree(relativePath = "") {
-  const { absolutePath, relativePath: safeRelativePath } = resolveSafePath(relativePath);
-
-  const walk = (currentAbsolutePath, currentRelativePath) => {
-    return fs
-      .readdirSync(currentAbsolutePath, { withFileTypes: true })
-      .filter((entry) => !entry.name.startsWith(".git"))
-      .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
-      .map((entry) => {
-        const nextRelativePath = [currentRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
-        if (entry.isDirectory()) {
-          return {
-            name: entry.name,
-            relativePath: nextRelativePath,
-            itemType: "folder",
-            children: walk(path.join(currentAbsolutePath, entry.name), nextRelativePath),
-          };
-        }
-
+    .map((entry) => {
+      const nextRelativePath = [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
+      if (entry.isDirectory()) {
         return {
           name: entry.name,
+          itemType: "folder",
           relativePath: nextRelativePath,
-          itemType: "file",
+          children: listDirectoryTree(path.join(baseAbsolutePath, entry.name), nextRelativePath),
         };
-      });
-  };
+      }
 
-  return {
-    targetPath: safeRelativePath,
-    itemType: "folder",
-    tree: walk(absolutePath, safeRelativePath),
-  };
+      return {
+        name: entry.name,
+        itemType: "file",
+        relativePath: nextRelativePath,
+      };
+    });
 }
 
-function openTarget(relativePath = "") {
-  const { absolutePath, relativePath: safeRelativePath } = resolveSafePath(relativePath);
+function listDirectoryItems(baseAbsolutePath, baseRelativePath = "") {
+  return fs
+    .readdirSync(baseAbsolutePath, { withFileTypes: true })
+    .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
+    .map((entry) => ({
+      name: entry.name,
+      itemType: entry.isDirectory() ? "folder" : "file",
+      relativePath: [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/"),
+    }));
+}
+
+function buildOpenPayload(companyMongoId, workspaceId, targetPath = "") {
+  const { absolutePath, relativePath } = resolveWorkspacePath(companyMongoId, workspaceId, targetPath);
   const stats = fs.statSync(absolutePath);
 
   if (stats.isDirectory()) {
     return {
-      ...listDirectory(safeRelativePath),
-      ...buildFolderTree(safeRelativePath),
+      workspaceId,
+      targetPath: relativePath,
+      itemType: "folder",
+      items: listDirectoryItems(absolutePath, relativePath),
+      tree: listDirectoryTree(absolutePath, relativePath),
     };
   }
 
-  const extension = path.extname(absolutePath).toLowerCase();
-  const isTextPreview = TEXT_EXTENSIONS.has(extension) && stats.size <= MAX_TEXT_PREVIEW_SIZE;
-
+  const safePreview = stats.size <= MAX_TEXT_PREVIEW_SIZE && isAllowedFile(relativePath);
   return {
-    targetPath: safeRelativePath,
+    workspaceId,
+    targetPath: relativePath,
     itemType: "file",
     fileName: path.basename(absolutePath),
-    extension,
-    size: stats.size,
-    content: isTextPreview ? fs.readFileSync(absolutePath, "utf8") : "",
-    previewAvailable: isTextPreview,
+    content: safePreview ? fs.readFileSync(absolutePath, "utf8") : "",
+    previewAvailable: safePreview,
   };
 }
 
 async function saveRecentActivity(companyMongoId, targetPath, itemType, action) {
-  const cleanPath = toRelativePath(targetPath);
+  const cleanPath = String(targetPath || "").trim();
   if (!cleanPath) {
     return;
   }
@@ -168,7 +144,7 @@ async function saveRecentActivity(companyMongoId, targetPath, itemType, action) 
     return;
   }
 
-  const withoutDuplicate = (company.recentFiles || []).filter(
+  const remaining = (company.recentFiles || []).filter(
     (item) => item.targetPath !== cleanPath || item.action !== action
   );
 
@@ -179,83 +155,126 @@ async function saveRecentActivity(companyMongoId, targetPath, itemType, action) 
       action,
       lastAccessedAt: new Date(),
     },
-    ...withoutDuplicate,
-  ].slice(0, 10);
+    ...remaining,
+  ].slice(0, 12);
 
   await company.save();
 }
 
-function searchFilesRecursive(baseAbsolutePath, baseRelativePath, query, matches) {
+function walkSearch(baseAbsolutePath, baseRelativePath, query, matches) {
   if (matches.length >= MAX_SEARCH_RESULTS) {
     return;
   }
 
-  const entries = fs.readdirSync(baseAbsolutePath, { withFileTypes: true }).filter((entry) => !entry.name.startsWith(".git"));
+  const entries = fs.readdirSync(baseAbsolutePath, { withFileTypes: true });
 
   for (const entry of entries) {
     if (matches.length >= MAX_SEARCH_RESULTS) {
       return;
     }
 
-    const nextRelativePath = [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
-    const nextAbsolutePath = path.join(baseAbsolutePath, entry.name);
-    const itemType = entry.isDirectory() ? "folder" : "file";
-
+    const relativePath = [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
     if (entry.name.toLowerCase().includes(query)) {
       matches.push({
         name: entry.name,
-        relativePath: nextRelativePath,
-        itemType,
+        relativePath,
+        itemType: entry.isDirectory() ? "folder" : "file",
       });
     }
 
     if (entry.isDirectory()) {
-      searchFilesRecursive(nextAbsolutePath, nextRelativePath, query, matches);
+      walkSearch(path.join(baseAbsolutePath, entry.name), relativePath, query, matches);
     }
   }
 }
 
 router.use(authMiddleware, requireCompanyRole);
 
+router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), async (req, res) => {
+  try {
+    const files = req.files || [];
+    if (!files.length) {
+      return res.status(400).json({ message: "Choose at least one coding file or folder." });
+    }
+
+    const rawRelativePaths = Array.isArray(req.body.relativePaths)
+      ? req.body.relativePaths
+      : req.body.relativePaths
+        ? [req.body.relativePaths]
+        : [];
+
+    const workspaceId = crypto.randomBytes(6).toString("hex");
+    const workspaceRoot = getWorkspaceRoot(req.user.companyMongoId, workspaceId);
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+
+    let savedFiles = 0;
+    let workspaceLabel = "Uploaded workspace";
+
+    files.forEach((file, index) => {
+      const relativePath = normalizeRelativePath(rawRelativePaths[index] || file.originalname);
+
+      if (!isAllowedFile(relativePath)) {
+        return;
+      }
+
+      const topFolderName = relativePath.split("/")[0];
+      if (topFolderName) {
+        workspaceLabel = topFolderName;
+      }
+
+      const outputPath = path.join(workspaceRoot, relativePath);
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, file.buffer);
+      savedFiles += 1;
+    });
+
+    if (!savedFiles) {
+      fs.rmSync(workspaceRoot, { recursive: true, force: true });
+      return res.status(400).json({ message: "Only coding and project files are allowed." });
+    }
+
+    await saveRecentActivity(req.user.companyMongoId, workspaceLabel, "folder", "upload");
+
+    return res.status(201).json({
+      message: "Workspace uploaded successfully.",
+      workspaceId,
+      workspaceLabel,
+      tree: listDirectoryTree(workspaceRoot),
+      items: listDirectoryItems(workspaceRoot),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to upload workspace." });
+  }
+});
+
 router.get("/open", async (req, res) => {
   try {
+    const workspaceId = String(req.query.workspaceId || "");
     const targetPath = String(req.query.target || "");
-    const payload = openTarget(targetPath);
-    await saveRecentActivity(req.user.companyMongoId, payload.targetPath, payload.itemType, "open");
+    const payload = buildOpenPayload(req.user.companyMongoId, workspaceId, targetPath);
+    await saveRecentActivity(req.user.companyMongoId, payload.targetPath || "workspace", payload.itemType, "open");
     return res.json(payload);
   } catch (error) {
     return res.status(400).json({ message: error.message || "Failed to open file or folder." });
   }
 });
 
-router.post("/delete", async (req, res) => {
-  try {
-    const targetPath = String(req.body.targetPath || "");
-    const { absolutePath, relativePath } = resolveSafePath(targetPath);
-
-    if (!relativePath) {
-      return res.status(400).json({ message: "Root folder cannot be deleted." });
-    }
-
-    const stats = fs.statSync(absolutePath);
-    fs.rmSync(absolutePath, { recursive: true, force: false });
-    await saveRecentActivity(req.user.companyMongoId, relativePath, stats.isDirectory() ? "folder" : "file", "delete");
-
-    return res.json({ message: "File or folder deleted successfully.", targetPath: relativePath });
-  } catch (error) {
-    return res.status(400).json({ message: error.message || "Failed to delete file or folder." });
-  }
-});
-
 router.get("/search", async (req, res) => {
   try {
+    const workspaceId = String(req.query.workspaceId || "");
     const query = String(req.query.q || "").trim().toLowerCase();
+
+    if (!workspaceId) {
+      return res.status(400).json({ message: "Workspace ID is required." });
+    }
+
     if (!query) {
       return res.status(400).json({ message: "Search query is required." });
     }
 
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
     const results = [];
-    searchFilesRecursive(SAFE_ROOT, "", query, results);
+    walkSearch(workspaceRoot, "", query, results);
     await saveRecentActivity(req.user.companyMongoId, query, "file", "search");
     return res.json({ results });
   } catch (error) {
@@ -281,6 +300,15 @@ router.post("/recent", async (req, res) => {
     return res.json({ message: "Recent activity saved." });
   } catch (error) {
     return res.status(400).json({ message: error.message || "Failed to save recent activity." });
+  }
+});
+
+router.delete("/recent", async (req, res) => {
+  try {
+    await Company.findByIdAndUpdate(req.user.companyMongoId, { $set: { recentFiles: [] } });
+    return res.json({ message: "Recent files cleared successfully." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to clear recent files." });
   }
 });
 
