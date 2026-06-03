@@ -445,6 +445,8 @@ button {
   flex-direction: column;
   gap: 10px;
   overflow: hidden;
+  height: 100%;
+  min-height: 540px;
 }
 
 .preview-actions {
@@ -588,6 +590,8 @@ button {
   overflow-x: auto;
   min-height: 0;
   flex: 1;
+  height: 100%;
+  max-height: 100%;
 }
 
 .code-grid {
@@ -596,6 +600,7 @@ button {
   font-family: Consolas, "Courier New", monospace;
   font-size: 13px;
   line-height: 1.65;
+  min-width: max-content;
 }
 
 .line-numbers {
@@ -612,6 +617,7 @@ button {
   padding: 14px 16px;
   color: var(--text);
   white-space: pre;
+  min-width: max-content;
 }
 
 .code-block code {
@@ -799,6 +805,12 @@ button {
   text-align: left;
 }
 
+.settings-arrow {
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 600;
+}
+
 .settings-item.danger strong {
   color: var(--danger);
 }
@@ -829,6 +841,10 @@ button {
 @media (max-width: 980px) {
   .workspace-body {
     grid-template-columns: 1fr;
+  }
+
+  .preview-panel {
+    min-height: 420px;
   }
 }
 
@@ -878,5 +894,9 @@ button {
 
   .code-grid {
     font-size: 12px;
+  }
+
+  .preview-panel {
+    min-height: 320px;
   }
 }

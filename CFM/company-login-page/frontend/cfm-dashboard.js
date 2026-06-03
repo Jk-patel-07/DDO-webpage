@@ -26,6 +26,7 @@ const state = {
   notifications: [],
   employeeFiles: [],
   editingEmployeeId: "",
+  companyEditUnlocked: false,
 };
 
 const allowedExtensions = [
@@ -80,6 +81,7 @@ const pinInputValue = document.getElementById("pinInputValue");
 const pinVerifyValue = document.getElementById("pinVerifyValue");
 const employeeFilesModal = document.getElementById("employeeFilesModal");
 const employeeList = document.getElementById("employeeList");
+const companyEditPasswordModal = document.getElementById("companyEditPasswordModal");
 const companyDetailsModal = document.getElementById("companyDetailsModal");
 const logoutPasswordModal = document.getElementById("logoutPasswordModal");
 const logoutPasswordInput = document.getElementById("logoutPasswordInput");
@@ -728,7 +730,7 @@ async function openEmployeeFilesModal() {
 }
 
 async function openCompanyDetailsModal() {
-  const details = await apiRequest(`${API_BASE_URL}/api/company/details`, {
+  const details = await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/current`, {
     headers: authHeaders(),
   });
 
@@ -741,33 +743,82 @@ async function openCompanyDetailsModal() {
   document.getElementById("updateHeadOfficeState").value = details.headOfficeState || "";
   document.getElementById("updateHeadOfficeCountry").value = details.headOfficeCountry || "";
   document.getElementById("updateHeadOfficePincode").value = details.headOfficePincode || "";
+  document.getElementById("updateFilledByName").value = details.filledByName || "";
+  document.getElementById("updateFilledByEmail").value = details.filledByEmail || "";
+  document.getElementById("updateFilledByPhone").value = details.filledByPhone || "";
+  document.getElementById("updatePersonName").value = details.personName || "";
+  document.getElementById("updatePersonEmail").value = details.personEmail || "";
+  document.getElementById("updatePersonPhone").value = details.personPhone || "";
+  document.getElementById("updatePersonPosition").value = details.personPosition || "";
   document.getElementById("updateCompanyDetails").value = details.companyDetails || "";
+  document.getElementById("updateCompanyLogo").value = "";
+  document.getElementById("updateCompanyPhoto").value = "";
+  document.getElementById("updateCompanyProof").value = "";
 
-  closeModal(settingsModal);
   openModal(companyDetailsModal);
 }
 
 async function saveCompanyDetailsUpdate() {
-  await apiRequest(`${API_BASE_URL}/api/company/details`, {
-    method: "PUT",
-    headers: authHeaders("application/json"),
-    body: JSON.stringify({
-      companyName: document.getElementById("updateCompanyName").value.trim(),
-      companyEmail: document.getElementById("updateCompanyEmail").value.trim(),
-      companyPhone: document.getElementById("updateCompanyPhone").value.trim(),
-      companyWebsite: document.getElementById("updateCompanyWebsite").value.trim(),
-      officeDetails: document.getElementById("updateOfficeDetails").value.trim(),
-      headOfficeCity: document.getElementById("updateHeadOfficeCity").value.trim(),
-      headOfficeState: document.getElementById("updateHeadOfficeState").value.trim(),
-      headOfficeCountry: document.getElementById("updateHeadOfficeCountry").value.trim(),
-      headOfficePincode: document.getElementById("updateHeadOfficePincode").value.trim(),
-      companyDetails: document.getElementById("updateCompanyDetails").value.trim(),
-    }),
+  const formData = new FormData();
+  [
+    ["companyName", "updateCompanyName"],
+    ["companyEmail", "updateCompanyEmail"],
+    ["companyPhone", "updateCompanyPhone"],
+    ["companyWebsite", "updateCompanyWebsite"],
+    ["officeDetails", "updateOfficeDetails"],
+    ["headOfficeCity", "updateHeadOfficeCity"],
+    ["headOfficeState", "updateHeadOfficeState"],
+    ["headOfficeCountry", "updateHeadOfficeCountry"],
+    ["headOfficePincode", "updateHeadOfficePincode"],
+    ["filledByName", "updateFilledByName"],
+    ["filledByEmail", "updateFilledByEmail"],
+    ["filledByPhone", "updateFilledByPhone"],
+    ["personName", "updatePersonName"],
+    ["personEmail", "updatePersonEmail"],
+    ["personPhone", "updatePersonPhone"],
+    ["personPosition", "updatePersonPosition"],
+    ["companyDetails", "updateCompanyDetails"],
+  ].forEach(([field, elementId]) => {
+    formData.append(field, document.getElementById(elementId).value.trim());
+  });
+
+  const logoFile = document.getElementById("updateCompanyLogo").files[0];
+  const photoFile = document.getElementById("updateCompanyPhoto").files[0];
+  const proofFile = document.getElementById("updateCompanyProof").files[0];
+  if (logoFile) formData.append("companyLogo", logoFile);
+  if (photoFile) formData.append("companyPhoto", photoFile);
+  if (proofFile) formData.append("companyProof", proofFile);
+
+  await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/request`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
   });
 
   await loadCompanyProfile();
   closeModal(companyDetailsModal);
-  showBanner("success", "Company details updated successfully.");
+  state.companyEditUnlocked = false;
+  showBanner("success", "Edit request submitted for admin approval.");
+}
+
+function openCompanyEditPasswordModal() {
+  closeModal(settingsModal);
+  document.getElementById("companyEditPasswordInput").value = "";
+  openModal(companyEditPasswordModal);
+}
+
+async function verifyCompanyEditPassword() {
+  await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/verify-password`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      companyPassword: document.getElementById("companyEditPasswordInput").value,
+    }),
+  });
+
+  state.companyEditUnlocked = true;
+  closeModal(companyEditPasswordModal);
+  await openCompanyDetailsModal();
 }
 
 function openLogoutPasswordModal() {
@@ -1002,7 +1053,7 @@ document.getElementById("closePinVerifyModalButton").addEventListener("click", (
 document.getElementById("settingsButton").addEventListener("click", () => openModal(settingsModal));
 document.getElementById("closeSettingsModalButton").addEventListener("click", () => closeModal(settingsModal));
 document.getElementById("employeeFilesButton").addEventListener("click", openEmployeeFilesModal);
-document.getElementById("companyDetailsUpdateButton").addEventListener("click", openCompanyDetailsModal);
+document.getElementById("companyDetailsUpdateButton").addEventListener("click", openCompanyEditPasswordModal);
 document.getElementById("settingsLogoutButton").addEventListener("click", openLogoutPasswordModal);
 document.getElementById("goBackButton").addEventListener("click", goBack);
 copyCodeButton.addEventListener("click", copyCurrentCode);
@@ -1040,6 +1091,8 @@ document.getElementById("saveEmployeeButton").addEventListener("click", saveEmpl
 document.getElementById("resetEmployeeButton").addEventListener("click", resetEmployeeForm);
 document.getElementById("closeCompanyDetailsModalButton").addEventListener("click", () => closeModal(companyDetailsModal));
 document.getElementById("saveCompanyDetailsButton").addEventListener("click", saveCompanyDetailsUpdate);
+document.getElementById("closeCompanyEditPasswordModalButton").addEventListener("click", () => closeModal(companyEditPasswordModal));
+document.getElementById("verifyCompanyEditPasswordButton").addEventListener("click", verifyCompanyEditPassword);
 document.getElementById("closeLogoutPasswordModalButton").addEventListener("click", () => closeModal(logoutPasswordModal));
 document.getElementById("confirmLogoutButton").addEventListener("click", confirmLogoutWithPassword);
 
@@ -1102,6 +1155,9 @@ window.addEventListener("click", (event) => {
   }
   if (event.target === employeeFilesModal) {
     closeModal(employeeFilesModal);
+  }
+  if (event.target === companyEditPasswordModal) {
+    closeModal(companyEditPasswordModal);
   }
   if (event.target === companyDetailsModal) {
     closeModal(companyDetailsModal);

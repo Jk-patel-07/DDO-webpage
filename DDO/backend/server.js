@@ -9,6 +9,7 @@ dotenv.config();
 const companyRoutes = require("./routes/companyRoutes");
 const cfmRoutes = require("./routes/cfmRoutes");
 const cfmPrivateRoutes = require("./CFM/routes/cfmPrivateRoutes");
+const cfmCompanyEditRoutes = require("./CFM/routes/cfmCompanyEditRoutes");
 const userRoutes = require("./routes/userRoutes");
 
 const app = express();
@@ -34,6 +35,7 @@ app.use("/api/company", companyRoutes);
 app.use("/api/company-form", companyRoutes);
 app.use("/api/cfm", cfmRoutes);
 app.use("/api/cfm", cfmPrivateRoutes);
+app.use("/api/cfm/company/edit", cfmCompanyEditRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
