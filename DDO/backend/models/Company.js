@@ -24,6 +24,15 @@ const companySchema = new mongoose.Schema(
       companyPhoto: { type: String, default: "" },
       companyProof: { type: String, default: "" }
     },
+    employeeFiles: [
+      {
+        name: { type: String, default: "", trim: true },
+        role: { type: String, default: "", trim: true },
+        notes: { type: String, default: "", trim: true },
+        fileName: { type: String, default: "", trim: true },
+        updatedAt: { type: Date, default: Date.now }
+      }
+    ],
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

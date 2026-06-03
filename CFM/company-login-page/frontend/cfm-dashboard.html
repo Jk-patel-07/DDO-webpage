@@ -5,9 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CFM Dashboard</title>
     <link rel="stylesheet" href="./cfm-dashboard.css" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css"
+    />
   </head>
   <body data-theme="vercel">
-    <div class="app-shell">
+    <div class="app-shell cfm-dashboard">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-head">
           <div>
@@ -87,8 +91,8 @@
         <button class="icon-button floating-menu-button" id="openSidebarButton" type="button" aria-label="Open sidebar">
           <span class="hamburger"></span>
         </button>
-        <div class="banner success" id="successBanner" role="status" aria-live="polite"></div>
-        <div class="banner error" id="errorBanner" role="alert" aria-live="assertive"></div>
+        <div class="banner success toast-banner" id="successBanner" role="status" aria-live="polite"></div>
+        <div class="banner error toast-banner" id="errorBanner" role="alert" aria-live="assertive"></div>
 
         <main class="workspace-grid">
           <section class="panel explorer-panel">
@@ -100,10 +104,15 @@
             </div>
 
             <div class="toolbar">
-              <button class="subtle-button" id="goBackButton" type="button">
-                <span class="back-arrow">&larr;</span>
-              </button>
-              <input id="searchInput" type="search" placeholder="Search files..." />
+              <div class="search-shell">
+                <button class="search-inline-button" id="goBackButton" type="button" aria-label="Go back">
+                  <span class="back-arrow">&larr;</span>
+                </button>
+                <span class="search-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                </span>
+                <input id="searchInput" type="search" placeholder="Search files..." />
+              </div>
               <button class="subtle-button" id="searchSubmitButton" type="button">Search</button>
             </div>
 
@@ -122,12 +131,24 @@
 
               <section class="preview-panel">
                 <div class="preview-head">
-                  <div>
-                    <p class="preview-label">Preview</p>
-                    <h4 id="previewFileName">No file selected</h4>
-                  </div>
-                  <button class="subtle-button" id="copyCodeButton" type="button">Copy</button>
+                <div>
+                  <p class="preview-label">Preview</p>
+                  <h4 id="previewFileName">No file selected</h4>
                 </div>
+                <div class="preview-actions">
+                  <button class="subtle-button" id="copyCodeButton" type="button">Copy</button>
+                  <div class="preview-dropdown">
+                    <button class="icon-button" id="previewMenuButton" type="button" aria-label="Preview options">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>
+                    </button>
+                    <div class="preview-dropdown-menu hidden" id="previewDropdownMenu">
+                      <button class="preview-menu-item" id="previewCopyMenuItem" type="button">Copy code</button>
+                      <button class="preview-menu-item" id="previewDownloadMenuItem" type="button">Download current file</button>
+                      <button class="preview-menu-item" id="previewInfoMenuItem" type="button">View file info</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
                 <div class="preview-meta" id="previewMeta">Open a coding file from the left side to see its content.</div>
                 <div class="preview-content" id="previewContent">
                   <div class="empty-state">No file selected</div>
@@ -239,25 +260,26 @@
 
         <div class="settings-list">
           <label class="settings-item">
-            <span>Theme option</span>
+            <span>Theme</span>
             <select id="themeSelect">
               <option value="vercel">Vercel Dark</option>
               <option value="graphite">Graphite Dark</option>
+              <option value="light">White Mode</option>
             </select>
           </label>
 
-          <button class="settings-item action" id="settingsCompanyPrivacyButton" type="button">
-            <span>Company Info privacy option</span>
+          <button class="settings-item action" id="employeeFilesButton" type="button">
+            <span>Employee Files and Manage</span>
             <strong>Open</strong>
           </button>
 
-          <button class="settings-item action" id="clearRecentFilesButton" type="button">
-            <span>Clear recent files option</span>
-            <strong>Clear</strong>
+          <button class="settings-item action" id="companyDetailsUpdateButton" type="button">
+            <span>Company Details Update using DDO One</span>
+            <strong>Open</strong>
           </button>
 
           <button class="settings-item action danger" id="settingsLogoutButton" type="button">
-            <span>Logout option</span>
+            <span>Logout</span>
             <strong>Logout</strong>
           </button>
         </div>
@@ -281,9 +303,84 @@
       </div>
     </div>
 
+    <div class="modal hidden" id="employeeFilesModal">
+      <div class="modal-card animated">
+        <div class="modal-head">
+          <div>
+            <p class="panel-label">Employee Files</p>
+            <h3>Employee Files and Manage</h3>
+          </div>
+          <button class="icon-button" id="closeEmployeeFilesModalButton" type="button" aria-label="Close">
+            <span>&times;</span>
+          </button>
+        </div>
+        <div class="employee-form">
+          <input id="employeeNameInput" type="text" placeholder="Employee name" />
+          <input id="employeeRoleInput" type="text" placeholder="Employee role" />
+          <input id="employeeFileNameInput" type="text" placeholder="Employee file name" />
+          <textarea id="employeeNotesInput" placeholder="Notes"></textarea>
+          <div class="modal-actions">
+            <button class="primary-button" id="saveEmployeeButton" type="button">Add employee file</button>
+            <button class="subtle-button" id="resetEmployeeButton" type="button">Reset</button>
+          </div>
+        </div>
+        <div class="employee-list" id="employeeList">
+          <div class="empty-state">No employee files yet</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="companyDetailsModal">
+      <div class="modal-card animated">
+        <div class="modal-head">
+          <div>
+            <p class="panel-label">DDO One Update</p>
+            <h3>Company Details Update using DDO One</h3>
+          </div>
+          <button class="icon-button" id="closeCompanyDetailsModalButton" type="button" aria-label="Close">
+            <span>&times;</span>
+          </button>
+        </div>
+        <div class="company-update-form">
+          <input id="updateCompanyName" type="text" placeholder="Company name" />
+          <input id="updateCompanyEmail" type="email" placeholder="Company email" />
+          <input id="updateCompanyPhone" type="text" placeholder="Company phone" />
+          <input id="updateCompanyWebsite" type="text" placeholder="Company website" />
+          <input id="updateOfficeDetails" type="text" placeholder="Head office details" />
+          <input id="updateHeadOfficeCity" type="text" placeholder="Head office city" />
+          <input id="updateHeadOfficeState" type="text" placeholder="Head office state" />
+          <input id="updateHeadOfficeCountry" type="text" placeholder="Head office country" />
+          <input id="updateHeadOfficePincode" type="text" placeholder="Head office pincode" />
+          <textarea id="updateCompanyDetails" placeholder="Company description"></textarea>
+          <div class="modal-actions">
+            <button class="primary-button" id="saveCompanyDetailsButton" type="button">Save update</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal hidden" id="logoutPasswordModal">
+      <div class="modal-card small animated">
+        <div class="modal-head">
+          <div>
+            <p class="panel-label">Logout</p>
+            <h3>Password confirmation</h3>
+          </div>
+          <button class="icon-button" id="closeLogoutPasswordModalButton" type="button" aria-label="Close">
+            <span>&times;</span>
+          </button>
+        </div>
+        <input id="logoutPasswordInput" type="password" placeholder="Enter company password" />
+        <div class="modal-actions">
+          <button class="primary-button" id="confirmLogoutButton" type="button">Logout</button>
+        </div>
+      </div>
+    </div>
+
     <input id="fileInput" type="file" multiple hidden />
     <input id="folderInput" type="file" multiple webkitdirectory directory hidden />
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
     <script src="./cfm-dashboard.js"></script>
   </body>
 </html>

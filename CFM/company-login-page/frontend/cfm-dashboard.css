@@ -44,6 +44,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   background: var(--bg);
   color: var(--text);
+  overflow: hidden;
 }
 
 button,
@@ -59,8 +60,9 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg);
+  overflow: hidden;
 }
 
 .sidebar {
@@ -215,6 +217,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .floating-menu-button {
@@ -222,6 +226,10 @@ button {
   top: 16px;
   left: 16px;
   z-index: 5;
+  display: inline-flex;
+}
+
+.floating-menu-button.hidden {
   display: none;
 }
 
@@ -279,6 +287,17 @@ button {
   display: block;
 }
 
+.toast-banner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 360px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  animation: toastIn 0.2s ease-out;
+}
+
 .banner.success {
   color: var(--success);
   background: color-mix(in srgb, var(--success) 10%, transparent);
@@ -293,6 +312,9 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .panel {
@@ -300,21 +322,40 @@ button {
   background: var(--panel);
   border-radius: 20px;
   padding: 14px;
+  min-height: 0;
 }
 
 .explorer-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .toolbar {
   gap: 8px;
 }
 
+.search-shell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  padding: 0 10px;
+}
+
 .toolbar input,
 .settings-item select,
-.pin-field input {
+.pin-field input,
+.employee-form input,
+.employee-form textarea,
+.company-update-form input,
+.company-update-form textarea,
+#logoutPasswordInput {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -322,6 +363,36 @@ button {
   background: var(--panel-strong);
   color: var(--text);
   padding: 0 12px;
+}
+
+.search-shell input {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.search-shell input:focus {
+  border: 0;
+}
+
+.search-inline-button {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+}
+
+.search-icon svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .toolbar input:focus,
@@ -351,7 +422,9 @@ button {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 12px;
-  min-height: 520px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .tree-panel,
@@ -371,6 +444,49 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-dropdown {
+  position: relative;
+}
+
+.preview-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  display: grid;
+  gap: 4px;
+  z-index: 6;
+}
+
+.preview-dropdown-menu.hidden {
+  display: none;
+}
+
+.preview-menu-item {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 9px 10px;
+}
+
+.preview-menu-item:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .section-head {
@@ -468,8 +584,10 @@ button {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   background: color-mix(in srgb, var(--bg) 85%, var(--panel-strong));
-  overflow: auto;
-  min-height: 380px;
+  overflow-y: auto;
+  overflow-x: auto;
+  min-height: 0;
+  flex: 1;
 }
 
 .code-grid {
@@ -494,6 +612,16 @@ button {
   padding: 14px 16px;
   color: var(--text);
   white-space: pre;
+}
+
+.code-block code {
+  display: block;
+  white-space: pre;
+}
+
+.hljs {
+  background: transparent !important;
+  padding: 0 !important;
 }
 
 .empty-state {
@@ -546,6 +674,17 @@ button {
   }
 }
 
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .company-details,
 .notification-list {
   display: grid;
@@ -573,6 +712,46 @@ button {
 .detail-row strong,
 .notification-item strong {
   display: block;
+}
+
+.employee-form,
+.company-update-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.employee-form textarea,
+.company-update-form textarea {
+  min-height: 90px;
+  resize: vertical;
+  padding: 12px;
+}
+
+.employee-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.employee-item {
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--panel-strong);
+  padding: 12px;
+}
+
+.employee-item-meta {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.employee-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .privacy-section {
@@ -686,6 +865,10 @@ button {
   .modal-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .search-shell {
+    width: 100%;
   }
 
   .panel,

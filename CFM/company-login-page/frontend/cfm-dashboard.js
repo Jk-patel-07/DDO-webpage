@@ -24,6 +24,8 @@ const state = {
   verifyPinDraft: "",
   pinStage: "create",
   notifications: [],
+  employeeFiles: [],
+  editingEmployeeId: "",
 };
 
 const allowedExtensions = [
@@ -69,12 +71,20 @@ const previewFileName = document.getElementById("previewFileName");
 const previewMeta = document.getElementById("previewMeta");
 const previewContent = document.getElementById("previewContent");
 const copyCodeButton = document.getElementById("copyCodeButton");
+const previewDropdownMenu = document.getElementById("previewDropdownMenu");
 const themeSelect = document.getElementById("themeSelect");
 const themeToggleText = document.getElementById("themeToggleText");
 const pinModalTitle = document.getElementById("pinModalTitle");
 const pinInputLabel = document.getElementById("pinInputLabel");
 const pinInputValue = document.getElementById("pinInputValue");
 const pinVerifyValue = document.getElementById("pinVerifyValue");
+const employeeFilesModal = document.getElementById("employeeFilesModal");
+const employeeList = document.getElementById("employeeList");
+const companyDetailsModal = document.getElementById("companyDetailsModal");
+const logoutPasswordModal = document.getElementById("logoutPasswordModal");
+const logoutPasswordInput = document.getElementById("logoutPasswordInput");
+const openSidebarButton = document.getElementById("openSidebarButton");
+let bannerTimerId = 0;
 
 function pushNotification(message, kind = "info") {
   state.notifications.unshift({
@@ -89,6 +99,10 @@ function pushNotification(message, kind = "info") {
 function showBanner(type, message) {
   successBanner.classList.remove("show");
   errorBanner.classList.remove("show");
+  if (bannerTimerId) {
+    window.clearTimeout(bannerTimerId);
+    bannerTimerId = 0;
+  }
 
   if (type === "success") {
     successBanner.textContent = message;
@@ -101,11 +115,19 @@ function showBanner(type, message) {
     errorBanner.classList.add("show");
     pushNotification(message, "error");
   }
+
+  bannerTimerId = window.setTimeout(() => {
+    clearBanner();
+  }, 2600);
 }
 
 function clearBanner() {
   successBanner.classList.remove("show");
   errorBanner.classList.remove("show");
+  if (bannerTimerId) {
+    window.clearTimeout(bannerTimerId);
+    bannerTimerId = 0;
+  }
 }
 
 function renderNotifications() {
@@ -175,6 +197,15 @@ function toggleTheme() {
 
 function setSidebarOpen(open) {
   sidebar.classList.toggle("open", open);
+  openSidebarButton.classList.toggle("hidden", open);
+}
+
+function syncSidebarState() {
+  if (window.innerWidth <= 860) {
+    setSidebarOpen(sidebar.classList.contains("open"));
+  } else {
+    setSidebarOpen(true);
+  }
 }
 
 function pushView(nextView) {
@@ -213,6 +244,22 @@ function fileIconSvg(type) {
   }
 
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>';
+}
+
+function languageFromFileName(fileName) {
+  const lowerName = String(fileName || "").toLowerCase();
+  if (lowerName.endsWith(".html")) return "html";
+  if (lowerName.endsWith(".css")) return "css";
+  if (lowerName.endsWith(".js") || lowerName.endsWith(".jsx")) return "javascript";
+  if (lowerName.endsWith(".ts") || lowerName.endsWith(".tsx")) return "typescript";
+  if (lowerName.endsWith(".json")) return "json";
+  if (lowerName.endsWith(".md")) return "markdown";
+  if (lowerName.endsWith(".py")) return "python";
+  if (lowerName.endsWith(".java")) return "java";
+  if (lowerName.endsWith(".c")) return "c";
+  if (lowerName.endsWith(".cpp")) return "cpp";
+  if (lowerName.endsWith(".php")) return "php";
+  return "plaintext";
 }
 
 function buildBreadcrumb(pathValue) {
@@ -326,11 +373,12 @@ function renderTree() {
 function renderCodePreview(content) {
   const lines = content.split("\n");
   const lineNumbers = lines.map((_, index) => index + 1).join("\n");
+  const languageClass = `language-${languageFromFileName(state.currentFileName)}`;
   return `
     <div class="code-surface">
       <div class="code-grid">
         <pre class="line-numbers">${lineNumbers}</pre>
-        <pre class="code-block">${escapeHtml(content)}</pre>
+        <pre class="code-block"><code class="${languageClass}">${escapeHtml(content)}</code></pre>
       </div>
     </div>
   `;
@@ -360,11 +408,16 @@ function renderSearchPreview(items) {
 function renderPreview() {
   breadcrumbPath.textContent = buildBreadcrumb(state.currentPath);
   copyCodeButton.disabled = !state.currentContent;
+  previewDropdownMenu.classList.add("hidden");
 
   if (state.view === "file") {
     previewFileName.textContent = state.currentFileName || "Selected file";
     previewMeta.textContent = state.currentPath || "Preview loaded";
     previewContent.innerHTML = renderCodePreview(state.currentContent);
+    const codeElement = previewContent.querySelector("code");
+    if (window.hljs && codeElement) {
+      window.hljs.highlightElement(codeElement);
+    }
     return;
   }
 
@@ -417,7 +470,7 @@ async function openWorkspaceTarget(targetPath = "") {
   renderTree();
   renderPreview();
   if (result.itemType === "file") {
-    showBanner("success", "File opened successfully");
+    showBanner("success", "File / Folder opened successfully");
   }
 }
 
@@ -550,6 +603,188 @@ async function loadPrivacyStatus() {
   notPrivateModeButton.classList.toggle("active-mode", state.privacyMode === "not-private");
   privateModeButton.classList.toggle("active-mode", state.privacyMode === "private");
   privacyStatusText.textContent = state.privacyMode === "private" ? "Private ON" : "Not Private";
+}
+
+async function loadEmployeeFiles() {
+  const result = await apiRequest(`${API_BASE_URL}/api/company/employee-files`, {
+    headers: authHeaders(),
+  });
+  state.employeeFiles = result.employeeFiles || [];
+}
+
+function resetEmployeeForm() {
+  state.editingEmployeeId = "";
+  document.getElementById("employeeNameInput").value = "";
+  document.getElementById("employeeRoleInput").value = "";
+  document.getElementById("employeeFileNameInput").value = "";
+  document.getElementById("employeeNotesInput").value = "";
+  document.getElementById("saveEmployeeButton").textContent = "Add employee file";
+}
+
+function renderEmployeeFiles() {
+  if (!state.employeeFiles.length) {
+    employeeList.innerHTML = '<div class="empty-state">No employee files yet</div>';
+    return;
+  }
+
+  employeeList.innerHTML = state.employeeFiles
+    .map((item) => `
+      <div class="employee-item">
+        <strong>${escapeHtml(item.name)}</strong>
+        <div class="employee-item-meta">
+          <span>${escapeHtml(item.role || "No role")}</span>
+          <span>${escapeHtml(item.fileName || "No file name")}</span>
+          <span>${escapeHtml(item.notes || "No notes")}</span>
+        </div>
+        <div class="employee-item-actions">
+          <button class="subtle-button" data-employee-view="${item._id}" type="button">View employee file</button>
+          <button class="subtle-button" data-employee-edit="${item._id}" type="button">Update employee file</button>
+          <button class="subtle-button" data-employee-remove="${item._id}" type="button">Remove employee file</button>
+        </div>
+      </div>
+    `)
+    .join("");
+
+  employeeList.querySelectorAll("[data-employee-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const employee = state.employeeFiles.find((item) => item._id === button.dataset.employeeView);
+      if (employee) {
+        showBanner("success", `Employee file: ${employee.name} | ${employee.fileName || "No file name"}`);
+      }
+    });
+  });
+
+  employeeList.querySelectorAll("[data-employee-edit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const employee = state.employeeFiles.find((item) => item._id === button.dataset.employeeEdit);
+      if (!employee) {
+        return;
+      }
+      state.editingEmployeeId = employee._id;
+      document.getElementById("employeeNameInput").value = employee.name || "";
+      document.getElementById("employeeRoleInput").value = employee.role || "";
+      document.getElementById("employeeFileNameInput").value = employee.fileName || "";
+      document.getElementById("employeeNotesInput").value = employee.notes || "";
+      document.getElementById("saveEmployeeButton").textContent = "Update employee file";
+    });
+  });
+
+  employeeList.querySelectorAll("[data-employee-remove]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!window.confirm("Remove this employee file from workspace?")) {
+        return;
+      }
+      await apiRequest(`${API_BASE_URL}/api/company/employee-files/${button.dataset.employeeRemove}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      await loadEmployeeFiles();
+      renderEmployeeFiles();
+      showBanner("success", "Employee file removed successfully.");
+    });
+  });
+}
+
+async function saveEmployeeFile() {
+  const payload = {
+    name: document.getElementById("employeeNameInput").value.trim(),
+    role: document.getElementById("employeeRoleInput").value.trim(),
+    fileName: document.getElementById("employeeFileNameInput").value.trim(),
+    notes: document.getElementById("employeeNotesInput").value.trim(),
+  };
+
+  if (!payload.name) {
+    showBanner("error", "Employee name is required.");
+    return;
+  }
+
+  if (state.editingEmployeeId) {
+    await apiRequest(`${API_BASE_URL}/api/company/employee-files/${state.editingEmployeeId}`, {
+      method: "PUT",
+      headers: authHeaders("application/json"),
+      body: JSON.stringify(payload),
+    });
+    showBanner("success", "Employee file updated successfully.");
+  } else {
+    await apiRequest(`${API_BASE_URL}/api/company/employee-files`, {
+      method: "POST",
+      headers: authHeaders("application/json"),
+      body: JSON.stringify(payload),
+    });
+    showBanner("success", "Employee file added successfully.");
+  }
+
+  await loadEmployeeFiles();
+  renderEmployeeFiles();
+  resetEmployeeForm();
+}
+
+async function openEmployeeFilesModal() {
+  await loadEmployeeFiles();
+  resetEmployeeForm();
+  renderEmployeeFiles();
+  closeModal(settingsModal);
+  openModal(employeeFilesModal);
+}
+
+async function openCompanyDetailsModal() {
+  const details = await apiRequest(`${API_BASE_URL}/api/company/details`, {
+    headers: authHeaders(),
+  });
+
+  document.getElementById("updateCompanyName").value = details.companyName || "";
+  document.getElementById("updateCompanyEmail").value = details.companyEmail || "";
+  document.getElementById("updateCompanyPhone").value = details.companyPhone || "";
+  document.getElementById("updateCompanyWebsite").value = details.companyWebsite || "";
+  document.getElementById("updateOfficeDetails").value = details.officeDetails || "";
+  document.getElementById("updateHeadOfficeCity").value = details.headOfficeCity || "";
+  document.getElementById("updateHeadOfficeState").value = details.headOfficeState || "";
+  document.getElementById("updateHeadOfficeCountry").value = details.headOfficeCountry || "";
+  document.getElementById("updateHeadOfficePincode").value = details.headOfficePincode || "";
+  document.getElementById("updateCompanyDetails").value = details.companyDetails || "";
+
+  closeModal(settingsModal);
+  openModal(companyDetailsModal);
+}
+
+async function saveCompanyDetailsUpdate() {
+  await apiRequest(`${API_BASE_URL}/api/company/details`, {
+    method: "PUT",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      companyName: document.getElementById("updateCompanyName").value.trim(),
+      companyEmail: document.getElementById("updateCompanyEmail").value.trim(),
+      companyPhone: document.getElementById("updateCompanyPhone").value.trim(),
+      companyWebsite: document.getElementById("updateCompanyWebsite").value.trim(),
+      officeDetails: document.getElementById("updateOfficeDetails").value.trim(),
+      headOfficeCity: document.getElementById("updateHeadOfficeCity").value.trim(),
+      headOfficeState: document.getElementById("updateHeadOfficeState").value.trim(),
+      headOfficeCountry: document.getElementById("updateHeadOfficeCountry").value.trim(),
+      headOfficePincode: document.getElementById("updateHeadOfficePincode").value.trim(),
+      companyDetails: document.getElementById("updateCompanyDetails").value.trim(),
+    }),
+  });
+
+  await loadCompanyProfile();
+  closeModal(companyDetailsModal);
+  showBanner("success", "Company details updated successfully.");
+}
+
+function openLogoutPasswordModal() {
+  closeModal(settingsModal);
+  logoutPasswordInput.value = "";
+  openModal(logoutPasswordModal);
+}
+
+async function confirmLogoutWithPassword() {
+  await apiRequest(`${API_BASE_URL}/api/company/verify-password`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({ companyPassword: logoutPasswordInput.value }),
+  });
+  closeModal(logoutPasswordModal);
+  localStorage.removeItem(TOKEN_KEY);
+  window.location.href = LOGIN_PATH;
 }
 
 function renderCompanyDetails(company) {
@@ -723,6 +958,7 @@ async function initializeDashboard() {
   setTheme(localStorage.getItem(THEME_KEY) || "vercel");
 
   try {
+    syncSidebarState();
     await loadCompanyProfile();
     await loadPrivacyStatus();
     renderTree();
@@ -765,17 +1001,47 @@ document.getElementById("closePinSetupModalButton").addEventListener("click", ()
 document.getElementById("closePinVerifyModalButton").addEventListener("click", () => closeModal(pinVerifyModal));
 document.getElementById("settingsButton").addEventListener("click", () => openModal(settingsModal));
 document.getElementById("closeSettingsModalButton").addEventListener("click", () => closeModal(settingsModal));
-document.getElementById("settingsCompanyPrivacyButton").addEventListener("click", async () => {
-  closeModal(settingsModal);
-  await openCompanyInfo();
-});
-document.getElementById("settingsLogoutButton").addEventListener("click", logout);
+document.getElementById("employeeFilesButton").addEventListener("click", openEmployeeFilesModal);
+document.getElementById("companyDetailsUpdateButton").addEventListener("click", openCompanyDetailsModal);
+document.getElementById("settingsLogoutButton").addEventListener("click", openLogoutPasswordModal);
 document.getElementById("goBackButton").addEventListener("click", goBack);
 copyCodeButton.addEventListener("click", copyCurrentCode);
 document.getElementById("notificationButton").addEventListener("click", () => openModal(notificationModal));
 document.getElementById("closeNotificationModalButton").addEventListener("click", () => closeModal(notificationModal));
 document.getElementById("themeToggleButton").addEventListener("click", toggleTheme);
-document.getElementById("logoutButton").addEventListener("click", logout);
+document.getElementById("logoutButton").addEventListener("click", openLogoutPasswordModal);
+document.getElementById("previewMenuButton").addEventListener("click", () => {
+  previewDropdownMenu.classList.toggle("hidden");
+});
+document.getElementById("previewCopyMenuItem").addEventListener("click", copyCurrentCode);
+document.getElementById("previewDownloadMenuItem").addEventListener("click", () => {
+  if (!state.currentContent || !state.currentFileName) {
+    showBanner("error", "Open a file first.");
+    return;
+  }
+  const blob = new Blob([state.currentContent], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = state.currentFileName;
+  link.click();
+  URL.revokeObjectURL(url);
+  showBanner("success", "Current file downloaded successfully.");
+});
+document.getElementById("previewInfoMenuItem").addEventListener("click", () => {
+  if (!state.currentFileName) {
+    showBanner("error", "Open a file first.");
+    return;
+  }
+  showBanner("success", `File info: ${state.currentFileName} | ${state.currentPath}`);
+});
+document.getElementById("closeEmployeeFilesModalButton").addEventListener("click", () => closeModal(employeeFilesModal));
+document.getElementById("saveEmployeeButton").addEventListener("click", saveEmployeeFile);
+document.getElementById("resetEmployeeButton").addEventListener("click", resetEmployeeForm);
+document.getElementById("closeCompanyDetailsModalButton").addEventListener("click", () => closeModal(companyDetailsModal));
+document.getElementById("saveCompanyDetailsButton").addEventListener("click", saveCompanyDetailsUpdate);
+document.getElementById("closeLogoutPasswordModalButton").addEventListener("click", () => closeModal(logoutPasswordModal));
+document.getElementById("confirmLogoutButton").addEventListener("click", confirmLogoutWithPassword);
 
 themeSelect.addEventListener("change", () => {
   setTheme(themeSelect.value);
@@ -834,6 +1100,20 @@ window.addEventListener("click", (event) => {
   if (event.target === notificationModal) {
     closeModal(notificationModal);
   }
+  if (event.target === employeeFilesModal) {
+    closeModal(employeeFilesModal);
+  }
+  if (event.target === companyDetailsModal) {
+    closeModal(companyDetailsModal);
+  }
+  if (event.target === logoutPasswordModal) {
+    closeModal(logoutPasswordModal);
+  }
+  if (!event.target.closest(".preview-dropdown")) {
+    previewDropdownMenu.classList.add("hidden");
+  }
 });
+
+window.addEventListener("resize", syncSidebarState);
 
 initializeDashboard();

@@ -562,7 +562,7 @@ router.post("/login", async (req, res) => {
 router.get("/me", authMiddleware, requireCompanyRole, async (req, res) => {
   try {
     const company = await Company.findById(req.user.companyMongoId).select(
-      "companyName companyEmail companyPhone companyWebsite status companyId companyKey"
+      "companyName companyEmail companyPhone companyWebsite status companyId companyKey createdAt headOfficeCity headOfficeState headOfficeCountry headOfficePincode companyDetails officeDetails"
     );
 
     if (!company) {
@@ -572,6 +572,168 @@ router.get("/me", authMiddleware, requireCompanyRole, async (req, res) => {
     return res.json(company);
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to fetch company dashboard." });
+  }
+});
+
+router.post("/verify-password", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const companyPassword = String(req.body.companyPassword || "");
+    if (!companyPassword) {
+      return res.status(400).json({ message: "Company password is required." });
+    }
+
+    const company = await Company.findById(req.user.companyMongoId).select("passwordHash");
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    const passwordOk = await bcrypt.compare(companyPassword, company.passwordHash || "");
+    if (!passwordOk) {
+      return res.status(401).json({ message: "Wrong password" });
+    }
+
+    return res.json({ message: "Password verified successfully." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Password verification failed." });
+  }
+});
+
+router.get("/details", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId).select(
+      "companyName companyEmail companyPhone companyWebsite companyDetails officeDetails headOfficeCity headOfficeState headOfficeCountry headOfficePincode"
+    );
+
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    return res.json(company);
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to load company details." });
+  }
+});
+
+router.put("/details", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    const fields = [
+      "companyName",
+      "companyEmail",
+      "companyPhone",
+      "companyWebsite",
+      "companyDetails",
+      "officeDetails",
+      "headOfficeCity",
+      "headOfficeState",
+      "headOfficeCountry",
+      "headOfficePincode"
+    ];
+
+    fields.forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        company[field] = String(req.body[field] || "").trim();
+      }
+    });
+
+    if (!company.companyName || !company.companyEmail || !company.companyPhone || !company.companyWebsite) {
+      return res.status(400).json({ message: "Company name, email, phone, and website are required." });
+    }
+
+    await company.save();
+    return res.json({ message: "Company details updated successfully." });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update company details." });
+  }
+});
+
+router.get("/employee-files", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId).select("employeeFiles");
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    return res.json({ employeeFiles: company.employeeFiles || [] });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to load employee files." });
+  }
+});
+
+router.post("/employee-files", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    const name = String(req.body.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ message: "Employee name is required." });
+    }
+
+    company.employeeFiles.push({
+      name,
+      role: String(req.body.role || "").trim(),
+      notes: String(req.body.notes || "").trim(),
+      fileName: String(req.body.fileName || "").trim(),
+      updatedAt: new Date()
+    });
+
+    await company.save();
+    return res.status(201).json({ message: "Employee file added successfully.", employeeFiles: company.employeeFiles });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to add employee file." });
+  }
+});
+
+router.put("/employee-files/:employeeId", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    const employee = company.employeeFiles.id(req.params.employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee file not found." });
+    }
+
+    ["name", "role", "notes", "fileName"].forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        employee[field] = String(req.body[field] || "").trim();
+      }
+    });
+    employee.updatedAt = new Date();
+
+    await company.save();
+    return res.json({ message: "Employee file updated successfully.", employeeFiles: company.employeeFiles });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update employee file." });
+  }
+});
+
+router.delete("/employee-files/:employeeId", authMiddleware, requireCompanyRole, async (req, res) => {
+  try {
+    const company = await Company.findById(req.user.companyMongoId);
+    if (!company) {
+      return res.status(404).json({ message: "Company not found." });
+    }
+
+    const employee = company.employeeFiles.id(req.params.employeeId);
+    if (!employee) {
+      return res.status(404).json({ message: "Employee file not found." });
+    }
+
+    employee.deleteOne();
+    await company.save();
+    return res.json({ message: "Employee file removed successfully.", employeeFiles: company.employeeFiles });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to remove employee file." });
   }
 });
 
