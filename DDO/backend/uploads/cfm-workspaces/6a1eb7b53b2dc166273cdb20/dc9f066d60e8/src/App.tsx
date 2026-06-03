@@ -773,8 +773,8 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         synth.playAscent();
-                        setEmail('google_student@gmail.com');
-                        setPassword('securePassword123');
+                        setEmail('');
+                        setPassword('');
                         setLoginStep('success');
                         setLoggedInUser('google_student');
                         setTimeout(() => setAppState('dashboard'), 1500);
