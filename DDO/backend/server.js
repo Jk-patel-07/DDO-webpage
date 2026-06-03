@@ -57,8 +57,16 @@ app.get("/cfm/company-details-edit", (_req, res) => {
   res.sendFile(path.join(cfmFrontendPath, "company-details-edit.html"));
 });
 
+app.get("/cfm/company-details-edit/", (_req, res) => {
+  res.sendFile(path.join(cfmFrontendPath, "company-details-edit.html"));
+});
+
 app.get("/CFM/company-details-edit", (_req, res) => {
   res.redirect("/cfm/company-details-edit");
+});
+
+app.get("/CFM/company-details-edit/", (_req, res) => {
+  res.sendFile(path.join(cfmFrontendPath, "company-details-edit.html"));
 });
 
 app.get("/ddo-one/edit", (_req, res) => {

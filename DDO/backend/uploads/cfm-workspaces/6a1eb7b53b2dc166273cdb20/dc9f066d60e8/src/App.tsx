@@ -196,8 +196,8 @@ export default function App() {
   // Simulated instant sign up
   const handleQuickSignup = () => {
     synth.playAction();
-    setEmail('aspirant_alms@edu.in');
-    setPassword('quantumMath101');
+    setEmail('');
+    setPassword('');
     setFocusedField('none');
   };
 

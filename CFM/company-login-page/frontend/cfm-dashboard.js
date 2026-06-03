@@ -941,7 +941,7 @@ async function verifyCompanyEditPassword() {
     window.setTimeout(async () => {
       try {
         closeModal(companyEditPasswordModal);
-        window.location.href = "/cfm/company-details-edit";
+        window.location.href = "/CFM/company-details-edit/";
       } catch (error) {
         console.log("Opening DDO One edit form failed:", error.message);
         openModal(companyEditPasswordModal);
