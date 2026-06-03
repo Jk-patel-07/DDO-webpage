@@ -4,7 +4,7 @@ const CfmPrivateUser = require("../models/CfmPrivateUser");
 
 async function getOrCreatePrivacyRecord(req) {
   const company = await Company.findById(req.user.companyMongoId).select(
-    "_id companyId companyName companyEmail companyPhone companyWebsite status personName personEmail personPhone"
+    "_id companyId companyName companyEmail companyPhone companyWebsite status personName personEmail personPhone createdAt"
   );
 
   if (!company) {
@@ -17,12 +17,16 @@ async function getOrCreatePrivacyRecord(req) {
     settings = await CfmPrivateUser.create({
       companyUserId: company._id,
       companyId: company.companyId || "",
-      privacyMode: "public",
+      privacyMode: "not-private",
       pinHash: "",
     });
   }
 
   return { company, settings };
+}
+
+function normalizePrivacyMode(value) {
+  return value === "private" ? "private" : "not-private";
 }
 
 function companyInfoPayload(company) {
@@ -33,6 +37,7 @@ function companyInfoPayload(company) {
     companyPhone: company.companyPhone || "",
     companyWebsite: company.companyWebsite || "",
     status: company.status || "",
+    createdAt: company.createdAt || null,
     personName: company.personName || "",
     personEmail: company.personEmail || "",
     personPhone: company.personPhone || "",
@@ -48,7 +53,7 @@ async function getPrivacyStatus(req, res) {
     }
 
     return res.json({
-      privacyMode: settings.privacyMode,
+      privacyMode: normalizePrivacyMode(settings.privacyMode),
       hasPin: Boolean(settings.pinHash),
     });
   } catch (error) {
@@ -56,51 +61,63 @@ async function getPrivacyStatus(req, res) {
   }
 }
 
-async function setPrivacyMode(req, res) {
+async function setPrivateMode(req, res) {
   try {
     const { company, settings } = await getOrCreatePrivacyRecord(req);
     if (!company) {
       return res.status(404).json({ message: "Company account not found." });
     }
 
-    const privacyMode = String(req.body.privacyMode || "").trim().toLowerCase();
     const pin = String(req.body.pin || "").trim();
     const confirmPin = String(req.body.confirmPin || "").trim();
 
-    if (!["public", "private"].includes(privacyMode)) {
-      return res.status(400).json({ message: "Choose public or private mode." });
-    }
-
     settings.companyId = company.companyId || "";
-    settings.privacyMode = privacyMode;
+    settings.privacyMode = "private";
 
-    if (privacyMode === "private") {
-      if (!pin || !confirmPin) {
-        return res.status(400).json({ message: "PIN and confirm PIN are required for private mode." });
-      }
-
-      if (!/^\d{4,8}$/.test(pin)) {
-        return res.status(400).json({ message: "PIN must be 4 to 8 digits." });
-      }
-
-      if (pin !== confirmPin) {
-        return res.status(400).json({ message: "PIN and confirm PIN must match." });
-      }
-
-      settings.pinHash = await bcrypt.hash(pin, 10);
-    } else {
-      settings.pinHash = "";
+    if (!pin || !confirmPin) {
+      return res.status(400).json({ message: "PIN and confirm PIN are required for private mode." });
     }
 
+    if (!/^\d{4,6}$/.test(pin)) {
+      return res.status(400).json({ message: "PIN must be 4 to 6 digits." });
+    }
+
+    if (pin !== confirmPin) {
+      return res.status(400).json({ message: "PIN and confirm PIN must match." });
+    }
+
+    settings.pinHash = await bcrypt.hash(pin, 10);
     await settings.save();
 
     return res.json({
-      message: privacyMode === "private" ? "Private mode saved successfully." : "Public mode enabled successfully.",
+      message: "Private mode enabled.",
       privacyMode: settings.privacyMode,
       hasPin: Boolean(settings.pinHash),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to save privacy settings." });
+  }
+}
+
+async function setNotPrivateMode(req, res) {
+  try {
+    const { company, settings } = await getOrCreatePrivacyRecord(req);
+    if (!company) {
+      return res.status(404).json({ message: "Company account not found." });
+    }
+
+    settings.companyId = company.companyId || "";
+    settings.privacyMode = "not-private";
+    settings.pinHash = "";
+    await settings.save();
+
+    return res.json({
+      message: "Private mode disabled.",
+      privacyMode: settings.privacyMode,
+      hasPin: false,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to update privacy mode." });
   }
 }
 
@@ -111,8 +128,13 @@ async function verifyPrivatePin(req, res) {
       return res.status(404).json({ message: "Company account not found." });
     }
 
-    if (settings.privacyMode !== "private") {
-      return res.json({ message: "Company info is public.", verified: true });
+    if (normalizePrivacyMode(settings.privacyMode) !== "private") {
+      return res.json({
+        message: "Company info is not private.",
+        verified: true,
+        privacyMode: "not-private",
+        company: companyInfoPayload(company),
+      });
     }
 
     const pin = String(req.body.pin || "").trim();
@@ -122,10 +144,15 @@ async function verifyPrivatePin(req, res) {
 
     const matches = settings.pinHash ? await bcrypt.compare(pin, settings.pinHash) : false;
     if (!matches) {
-      return res.status(401).json({ message: "Incorrect PIN.", verified: false });
+      return res.status(401).json({ message: "Wrong PIN", verified: false });
     }
 
-    return res.json({ message: "PIN verified successfully.", verified: true });
+    return res.json({
+      message: "PIN verified successfully.",
+      verified: true,
+      privacyMode: "private",
+      company: companyInfoPayload(company),
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to verify PIN." });
   }
@@ -138,12 +165,12 @@ async function getCompanyInfo(req, res) {
       return res.status(404).json({ message: "Company account not found." });
     }
 
-    if (settings.privacyMode === "private") {
+    if (normalizePrivacyMode(settings.privacyMode) === "private") {
       return res.status(403).json({ message: "PIN verification is required." });
     }
 
     return res.json({
-      privacyMode: settings.privacyMode,
+      privacyMode: "not-private",
       company: companyInfoPayload(company),
     });
   } catch (error) {
@@ -151,38 +178,10 @@ async function getCompanyInfo(req, res) {
   }
 }
 
-async function accessCompanyInfo(req, res) {
-  try {
-    const { company, settings } = await getOrCreatePrivacyRecord(req);
-    if (!company) {
-      return res.status(404).json({ message: "Company account not found." });
-    }
-
-    if (settings.privacyMode === "private") {
-      const pin = String(req.body.pin || "").trim();
-      if (!pin) {
-        return res.status(400).json({ message: "PIN is required." });
-      }
-
-      const matches = settings.pinHash ? await bcrypt.compare(pin, settings.pinHash) : false;
-      if (!matches) {
-        return res.status(401).json({ message: "Incorrect PIN." });
-      }
-    }
-
-    return res.json({
-      privacyMode: settings.privacyMode,
-      company: companyInfoPayload(company),
-    });
-  } catch (error) {
-    return res.status(500).json({ message: error.message || "Failed to access company info." });
-  }
-}
-
 module.exports = {
-  accessCompanyInfo,
   getCompanyInfo,
   getPrivacyStatus,
-  setPrivacyMode,
+  setNotPrivateMode,
+  setPrivateMode,
   verifyPrivatePin,
 };

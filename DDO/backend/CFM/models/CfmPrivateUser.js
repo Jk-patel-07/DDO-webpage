@@ -12,8 +12,8 @@ const cfmPrivateUserSchema = new mongoose.Schema(
     companyId: { type: String, required: true, trim: true },
     privacyMode: {
       type: String,
-      enum: ["public", "private"],
-      default: "public",
+      enum: ["not-private", "private"],
+      default: "not-private",
     },
     pinHash: { type: String, default: "" },
   },

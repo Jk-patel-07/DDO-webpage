@@ -12,15 +12,18 @@ const state = {
   currentPath: "",
   currentItemType: "",
   currentContent: "",
-  currentItems: [],
+  currentFileName: "",
   searchResults: [],
-  recentFiles: [],
   view: "empty",
   viewHistory: [],
   expandedPaths: new Set(),
-  privacyMode: "public",
+  privacyMode: "not-private",
   hasPin: false,
-  pinTarget: "pin",
+  pinDraft: "",
+  pinConfirmDraft: "",
+  verifyPinDraft: "",
+  pinStage: "create",
+  notifications: [],
 };
 
 const allowedExtensions = [
@@ -44,33 +47,44 @@ const successBanner = document.getElementById("successBanner");
 const errorBanner = document.getElementById("errorBanner");
 const sidebar = document.getElementById("sidebar");
 const treeRoot = document.getElementById("treeRoot");
-const resultPanel = document.getElementById("resultPanel");
 const breadcrumbPath = document.getElementById("breadcrumbPath");
 const workspaceMeta = document.getElementById("workspaceMeta");
 const searchInput = document.getElementById("searchInput");
-const goBackButton = document.getElementById("goBackButton");
 const fileInput = document.getElementById("fileInput");
 const folderInput = document.getElementById("folderInput");
 const uploadModal = document.getElementById("uploadModal");
 const companyInfoModal = document.getElementById("companyInfoModal");
+const pinSetupModal = document.getElementById("pinSetupModal");
+const pinVerifyModal = document.getElementById("pinVerifyModal");
 const settingsModal = document.getElementById("settingsModal");
-const pinSetupPanel = document.getElementById("pinSetupPanel");
-const pinVerifyPanel = document.getElementById("pinVerifyPanel");
+const notificationModal = document.getElementById("notificationModal");
+const notificationList = document.getElementById("notificationList");
 const companyDetailsPanel = document.getElementById("companyDetailsPanel");
-const profileName = document.getElementById("profileName");
 const profileMiniName = document.getElementById("profileMiniName");
 const profileAvatar = document.getElementById("profileAvatar");
-const companyIdValue = document.getElementById("companyIdValue");
-const companyStatusValue = document.getElementById("companyStatusValue");
-const companyEmailValue = document.getElementById("companyEmailValue");
-const publicModeButton = document.getElementById("publicModeButton");
+const notPrivateModeButton = document.getElementById("notPrivateModeButton");
 const privateModeButton = document.getElementById("privateModeButton");
-const pinValue = document.getElementById("pinValue");
-const confirmPinValue = document.getElementById("confirmPinValue");
-const verifyPinValue = document.getElementById("verifyPinValue");
-const pinTargetButton = document.getElementById("pinTargetButton");
-const confirmPinTargetButton = document.getElementById("confirmPinTargetButton");
+const privacyStatusText = document.getElementById("privacyStatusText");
+const previewFileName = document.getElementById("previewFileName");
+const previewMeta = document.getElementById("previewMeta");
+const previewContent = document.getElementById("previewContent");
+const copyCodeButton = document.getElementById("copyCodeButton");
 const themeSelect = document.getElementById("themeSelect");
+const themeToggleText = document.getElementById("themeToggleText");
+const pinModalTitle = document.getElementById("pinModalTitle");
+const pinInputLabel = document.getElementById("pinInputLabel");
+const pinInputValue = document.getElementById("pinInputValue");
+const pinVerifyValue = document.getElementById("pinVerifyValue");
+
+function pushNotification(message, kind = "info") {
+  state.notifications.unshift({
+    message,
+    kind,
+    time: new Date().toLocaleTimeString("en-IN"),
+  });
+  state.notifications = state.notifications.slice(0, 10);
+  renderNotifications();
+}
 
 function showBanner(type, message) {
   successBanner.classList.remove("show");
@@ -79,17 +93,35 @@ function showBanner(type, message) {
   if (type === "success") {
     successBanner.textContent = message;
     successBanner.classList.add("show");
+    pushNotification(message, "success");
   }
 
   if (type === "error") {
     errorBanner.textContent = message;
     errorBanner.classList.add("show");
+    pushNotification(message, "error");
   }
 }
 
 function clearBanner() {
   successBanner.classList.remove("show");
   errorBanner.classList.remove("show");
+}
+
+function renderNotifications() {
+  if (!state.notifications.length) {
+    notificationList.innerHTML = '<div class="empty-state">No notifications yet</div>';
+    return;
+  }
+
+  notificationList.innerHTML = state.notifications
+    .map((item) => `
+      <div class="notification-item">
+        <span>${item.time}</span>
+        <strong>${escapeHtml(item.message)}</strong>
+      </div>
+    `)
+    .join("");
 }
 
 function authHeaders(contentType) {
@@ -115,17 +147,6 @@ async function apiRequest(url, options = {}) {
   return result;
 }
 
-function setTheme(theme) {
-  const safeTheme = theme === "graphite" ? "graphite" : "vercel";
-  document.body.dataset.theme = safeTheme;
-  localStorage.setItem(THEME_KEY, safeTheme);
-  themeSelect.value = safeTheme;
-}
-
-function setSidebarOpen(open) {
-  sidebar.classList.toggle("open", open);
-}
-
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -133,6 +154,27 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function setTheme(theme) {
+  let safeTheme = "vercel";
+  if (theme === "graphite" || theme === "light") {
+    safeTheme = theme;
+  }
+  document.body.dataset.theme = safeTheme;
+  localStorage.setItem(THEME_KEY, safeTheme);
+  themeSelect.value = safeTheme === "graphite" ? "graphite" : "vercel";
+  themeToggleText.textContent = safeTheme === "light" ? "Dark Mode" : "White Mode";
+}
+
+function toggleTheme() {
+  const nextTheme = document.body.dataset.theme === "light" ? "vercel" : "light";
+  setTheme(nextTheme);
+  showBanner("success", `Theme changed to ${nextTheme === "light" ? "white" : "dark"} mode.`);
+}
+
+function setSidebarOpen(open) {
+  sidebar.classList.toggle("open", open);
 }
 
 function pushView(nextView) {
@@ -148,7 +190,21 @@ function goBack() {
   }
 
   state.view = state.viewHistory.pop();
-  renderResultPanel();
+  renderPreview();
+}
+
+function setActiveNav(buttonId) {
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle("active", item.id === buttonId);
+  });
+}
+
+function openModal(modal) {
+  modal.classList.remove("hidden");
+}
+
+function closeModal(modal) {
+  modal.classList.add("hidden");
 }
 
 function fileIconSvg(type) {
@@ -159,25 +215,15 @@ function fileIconSvg(type) {
   return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>';
 }
 
-function toggleExpanded(path) {
-  if (state.expandedPaths.has(path)) {
-    state.expandedPaths.delete(path);
-  } else {
-    state.expandedPaths.add(path);
-  }
-  renderTree();
-}
-
 function buildBreadcrumb(pathValue) {
   if (!pathValue) {
     return state.workspaceLabel || "No folder opened yet";
   }
 
-  const parts = [state.workspaceLabel || "Workspace", ...pathValue.split("/").filter(Boolean)];
-  return parts.join(" / ");
+  return [state.workspaceLabel || "Workspace", ...pathValue.split("/").filter(Boolean)].join(" / ");
 }
 
-function formatRecentTime(value) {
+function formatDate(value) {
   if (!value) {
     return "-";
   }
@@ -185,10 +231,26 @@ function formatRecentTime(value) {
   return new Date(value).toLocaleString("en-IN");
 }
 
-function setActiveNav(buttonId) {
-  document.querySelectorAll(".nav-item").forEach((item) => {
-    item.classList.toggle("active", item.id === buttonId);
+function renderCompany(company) {
+  state.company = company;
+  profileMiniName.textContent = company.companyName || "DDO Company";
+  profileAvatar.textContent = (company.companyName || "DD").slice(0, 2).toUpperCase();
+}
+
+async function loadCompanyProfile() {
+  const company = await apiRequest(`${API_BASE_URL}/api/company/me`, {
+    headers: authHeaders(),
   });
+  renderCompany(company);
+}
+
+function toggleExpanded(path) {
+  if (state.expandedPaths.has(path)) {
+    state.expandedPaths.delete(path);
+  } else {
+    state.expandedPaths.add(path);
+  }
+  renderTree();
 }
 
 function renderTreeNodes(nodes, depth = 0) {
@@ -205,12 +267,19 @@ function renderTreeNodes(nodes, depth = 0) {
 
       return `
         <div class="tree-node">
-          <div class="tree-row ${activeClass}" data-path="${escapeHtml(node.relativePath)}" data-type="${node.itemType}">
-            <button class="tree-toggle ${isFolder ? "" : "placeholder"}" type="button" data-toggle="${escapeHtml(node.relativePath)}">
-              ${isFolder ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"></svg>'}
-            </button>
-            <span class="tree-icon">${fileIconSvg(node.itemType)}</span>
-            <span>${escapeHtml(node.name)}</span>
+          <div class="tree-row ${activeClass} ${isFolder ? "" : "file-row"}" data-path="${escapeHtml(node.relativePath)}" data-type="${node.itemType}">
+            <div class="tree-row-main">
+              <button class="tree-toggle ${isFolder ? "" : "placeholder"}" type="button" data-toggle="${escapeHtml(node.relativePath)}">
+                ${isFolder ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>' : '<svg viewBox="0 0 24 24" aria-hidden="true"></svg>'}
+              </button>
+              <span class="tree-icon">${fileIconSvg(node.itemType)}</span>
+              <span class="tree-name">${escapeHtml(node.name)}</span>
+            </div>
+            ${!isFolder ? `
+              <button class="file-action-button" type="button" data-remove-path="${escapeHtml(node.relativePath)}" aria-label="Remove file from workspace">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            ` : ""}
           </div>
           ${isFolder ? `<div class="${childrenClass}">${renderTreeNodes(node.children || [], depth + 1)}</div>` : ""}
         </div>
@@ -241,155 +310,83 @@ function renderTree() {
       await openWorkspaceTarget(targetPath);
     });
   });
+
+  treeRoot.querySelectorAll("[data-remove-path]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const targetPath = button.getAttribute("data-remove-path") || "";
+      if (!window.confirm(`Remove ${targetPath} from this CFM workspace?`)) {
+        return;
+      }
+      await removeWorkspaceFile(targetPath);
+    });
+  });
 }
 
-function renderFolderItems(items) {
-  if (!items?.length) {
-    return '<div class="empty-state">This folder is empty.</div>';
-  }
-
+function renderCodePreview(content) {
+  const lines = content.split("\n");
+  const lineNumbers = lines.map((_, index) => index + 1).join("\n");
   return `
-    <div class="result-list">
-      ${items
-        .map(
-          (item) => `
-            <button class="result-item" data-open-path="${escapeHtml(item.relativePath)}" data-open-type="${item.itemType}" type="button">
-              <div>
-                <span class="result-name">${escapeHtml(item.name)}</span>
-                <span class="result-path">${escapeHtml(item.relativePath)}</span>
-              </div>
-              <span class="result-type">${item.itemType}</span>
-            </button>
-          `
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function renderSearchResults() {
-  if (!state.searchResults.length) {
-    return '<div class="empty-state">No files matched your search.</div>';
-  }
-
-  return `
-    <div class="result-list">
-      ${state.searchResults
-        .map(
-          (item) => `
-            <button class="result-item" data-open-path="${escapeHtml(item.relativePath)}" data-open-type="${item.itemType}" type="button">
-              <div>
-                <span class="result-name">${escapeHtml(item.name)}</span>
-                <span class="result-path">${escapeHtml(item.relativePath)}</span>
-              </div>
-              <span class="result-type">${item.itemType}</span>
-            </button>
-          `
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function renderRecentResults() {
-  if (!state.recentFiles.length) {
-    return '<div class="empty-state">No recent files yet.</div>';
-  }
-
-  return `
-    <div class="result-list">
-      ${state.recentFiles
-        .map(
-          (item) => `
-            <button class="result-item" data-open-path="${escapeHtml(item.targetPath)}" data-open-type="${item.itemType}" type="button">
-              <div>
-                <span class="result-name">${escapeHtml(item.targetPath)}</span>
-                <span class="result-path">${escapeHtml(formatRecentTime(item.lastAccessedAt))}</span>
-              </div>
-              <span class="result-type">${escapeHtml(item.action || item.itemType)}</span>
-            </button>
-          `
-        )
-        .join("")}
-    </div>
-  `;
-}
-
-function renderFilePreview() {
-  const preview = state.currentContent
-    ? `<pre class="code-preview">${escapeHtml(state.currentContent)}</pre>`
-    : '<div class="empty-state">Preview is not available for this file.</div>';
-
-  return `
-    <div class="result-list">
-      <div class="result-item">
-        <div>
-          <span class="result-name">${escapeHtml(state.currentPath.split("/").pop() || "File preview")}</span>
-          <span class="result-path">${escapeHtml(state.currentPath)}</span>
-        </div>
-        <span class="result-type">file</span>
+    <div class="code-surface">
+      <div class="code-grid">
+        <pre class="line-numbers">${lineNumbers}</pre>
+        <pre class="code-block">${escapeHtml(content)}</pre>
       </div>
-      ${preview}
     </div>
   `;
 }
 
-function renderResultPanel() {
+function renderSearchPreview(items) {
+  if (!items.length) {
+    return '<div class="empty-state">No files found.</div>';
+  }
+
+  return `
+    <div class="code-surface">
+      <div class="tree-root">
+        ${items
+          .map((item) => `
+            <button class="tree-row result-open-row" data-open-path="${escapeHtml(item.relativePath)}" data-open-type="${item.itemType}" type="button">
+              <span class="tree-icon">${fileIconSvg(item.itemType)}</span>
+              <span>${escapeHtml(item.name || item.relativePath)}</span>
+            </button>
+          `)
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderPreview() {
   breadcrumbPath.textContent = buildBreadcrumb(state.currentPath);
+  copyCodeButton.disabled = !state.currentContent;
+
+  if (state.view === "file") {
+    previewFileName.textContent = state.currentFileName || "Selected file";
+    previewMeta.textContent = state.currentPath || "Preview loaded";
+    previewContent.innerHTML = renderCodePreview(state.currentContent);
+    return;
+  }
 
   if (state.view === "search") {
-    resultPanel.innerHTML = renderSearchResults();
-  } else if (state.view === "recent") {
-    resultPanel.innerHTML = renderRecentResults();
-  } else if (state.view === "file") {
-    resultPanel.innerHTML = renderFilePreview();
-  } else if (state.view === "workspace" && state.currentItemType === "folder") {
-    resultPanel.innerHTML = renderFolderItems(state.currentItems);
+    previewFileName.textContent = "Search Result";
+    previewMeta.textContent = "Click a file from the list to open its preview.";
+    previewContent.innerHTML = renderSearchPreview(state.searchResults);
+  } else if (state.view === "workspace") {
+    previewFileName.textContent = state.workspaceLabel || "Workspace";
+    previewMeta.textContent = "Choose a coding file from the left side to see its content.";
+    previewContent.innerHTML = '<div class="empty-state">No file selected</div>';
   } else {
-    resultPanel.innerHTML = '<div class="empty-state">No folder opened yet</div>';
+    previewFileName.textContent = "No file selected";
+    previewMeta.textContent = "Open a coding file from the left side to see its content.";
+    previewContent.innerHTML = '<div class="empty-state">No file selected</div>';
   }
 
-  resultPanel.querySelectorAll("[data-open-path]").forEach((button) => {
+  previewContent.querySelectorAll(".result-open-row").forEach((button) => {
     button.addEventListener("click", async () => {
       await openWorkspaceTarget(button.dataset.openPath || "");
     });
   });
-}
-
-function renderCompany(company) {
-  state.company = company;
-  profileName.textContent = company.companyName || "DDO Company";
-  profileMiniName.textContent = company.companyName || "DDO Company";
-  companyIdValue.textContent = company.companyId || "-";
-  companyStatusValue.textContent = company.status || "-";
-  companyEmailValue.textContent = company.companyEmail || "-";
-  profileAvatar.textContent = (company.companyName || "DD").slice(0, 2).toUpperCase();
-}
-
-async function loadCompanyProfile() {
-  const company = await apiRequest(`${API_BASE_URL}/api/company/me`, {
-    headers: authHeaders(),
-  });
-  renderCompany(company);
-}
-
-async function loadRecentFiles() {
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
-    headers: authHeaders(),
-  });
-  state.recentFiles = result.recentFiles || [];
-}
-
-async function saveRecentActivity(targetPath, itemType, action) {
-  try {
-    await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
-      method: "POST",
-      headers: authHeaders("application/json"),
-      body: JSON.stringify({ targetPath, itemType, action }),
-    });
-  } catch (_error) {
-    // Keep the UI moving even if the recent save fails.
-  }
 }
 
 async function openWorkspaceTarget(targetPath = "") {
@@ -409,8 +406,8 @@ async function openWorkspaceTarget(targetPath = "") {
 
   state.currentPath = result.targetPath || "";
   state.currentItemType = result.itemType || "";
-  state.currentItems = result.items || [];
   state.currentContent = result.content || "";
+  state.currentFileName = result.fileName || (result.targetPath ? result.targetPath.split("/").pop() : "");
 
   if (result.tree && !state.currentPath) {
     state.tree = result.tree;
@@ -418,7 +415,10 @@ async function openWorkspaceTarget(targetPath = "") {
 
   pushView(result.itemType === "file" ? "file" : "workspace");
   renderTree();
-  renderResultPanel();
+  renderPreview();
+  if (result.itemType === "file") {
+    showBanner("success", "File opened successfully");
+  }
 }
 
 async function uploadWorkspace(files, relativePaths) {
@@ -440,21 +440,49 @@ async function uploadWorkspace(files, relativePaths) {
   state.workspaceLabel = result.workspaceLabel || "Uploaded workspace";
   state.tree = result.tree || [];
   state.currentPath = "";
-  state.currentItems = result.items || [];
   state.currentItemType = "folder";
   state.currentContent = "";
+  state.currentFileName = "";
   state.searchResults = [];
   state.viewHistory = [];
   state.expandedPaths = new Set();
 
   pushView("workspace");
   renderTree();
-  renderResultPanel();
+  renderPreview();
   workspaceMeta.textContent = `${state.workspaceLabel} is loaded with coding files only.`;
   setActiveNav("openWorkspaceButton");
   showBanner("success", result.message || "Workspace uploaded successfully.");
   closeModal(uploadModal);
-  await loadRecentFiles();
+}
+
+async function removeWorkspaceFile(targetPath) {
+  if (!state.workspaceId) {
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/workspace/remove`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      targetPath,
+    }),
+  });
+
+  state.tree = result.tree || [];
+
+  if (state.currentPath === targetPath) {
+    state.currentPath = "";
+    state.currentItemType = "folder";
+    state.currentContent = "";
+    state.currentFileName = "";
+    state.view = "workspace";
+  }
+
+  renderTree();
+  renderPreview();
+  showBanner("success", result.message || "File deleted successfully.");
 }
 
 async function handleFileSelection(fileList, isFolderMode) {
@@ -508,149 +536,137 @@ async function runSearch() {
 
   state.searchResults = result.results || [];
   pushView("search");
-  renderResultPanel();
+  renderPreview();
   setActiveNav("searchFilesButton");
 }
 
-async function showRecentFiles() {
-  await loadRecentFiles();
-  pushView("recent");
-  renderResultPanel();
-  setActiveNav("recentFilesButton");
-}
-
-function openModal(modal) {
-  modal.classList.remove("hidden");
-}
-
-function closeModal(modal) {
-  modal.classList.add("hidden");
-}
-
 async function loadPrivacyStatus() {
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/privacy`, {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/privacy/status`, {
     headers: authHeaders(),
   });
 
-  state.privacyMode = result.privacyMode || "public";
+  state.privacyMode = result.privacyMode || "not-private";
   state.hasPin = Boolean(result.hasPin);
-  publicModeButton.classList.toggle("active-mode", state.privacyMode === "public");
+  notPrivateModeButton.classList.toggle("active-mode", state.privacyMode === "not-private");
   privateModeButton.classList.toggle("active-mode", state.privacyMode === "private");
-}
-
-function resetPinInputs() {
-  pinValue.value = "";
-  confirmPinValue.value = "";
-  verifyPinValue.value = "";
-  state.pinTarget = "pin";
-  pinTargetButton.classList.add("active-target");
-  confirmPinTargetButton.classList.remove("active-target");
-}
-
-function showCompanyInfoPanel(mode) {
-  pinSetupPanel.classList.toggle("hidden", mode !== "setup");
-  pinVerifyPanel.classList.toggle("hidden", mode !== "verify");
-  companyDetailsPanel.classList.toggle("hidden", mode !== "details");
+  privacyStatusText.textContent = state.privacyMode === "private" ? "Private ON" : "Not Private";
 }
 
 function renderCompanyDetails(company) {
   companyDetailsPanel.innerHTML = `
-    <div class="details-grid">
-      <div class="details-item"><span>Company name</span><strong>${escapeHtml(company.companyName)}</strong></div>
-      <div class="details-item"><span>Company ID</span><strong>${escapeHtml(company.companyId)}</strong></div>
-      <div class="details-item"><span>Company email</span><strong>${escapeHtml(company.companyEmail)}</strong></div>
-      <div class="details-item"><span>Company phone</span><strong>${escapeHtml(company.companyPhone)}</strong></div>
-      <div class="details-item"><span>Company website</span><strong>${escapeHtml(company.companyWebsite)}</strong></div>
-      <div class="details-item"><span>Status</span><strong>${escapeHtml(company.status)}</strong></div>
-      <div class="details-item"><span>Person name</span><strong>${escapeHtml(company.personName)}</strong></div>
-      <div class="details-item"><span>Person email</span><strong>${escapeHtml(company.personEmail)}</strong></div>
-      <div class="details-item"><span>Person phone</span><strong>${escapeHtml(company.personPhone)}</strong></div>
-    </div>
+    <div class="detail-row"><span>Company Name</span><strong>${escapeHtml(company.companyName)}</strong></div>
+    <div class="detail-row"><span>Company ID</span><strong>${escapeHtml(company.companyId)}</strong></div>
+    <div class="detail-row"><span>Company Email</span><strong>${escapeHtml(company.companyEmail)}</strong></div>
+    <div class="detail-row"><span>Company Phone</span><strong>${escapeHtml(company.companyPhone)}</strong></div>
+    <div class="detail-row"><span>Company Website</span><strong>${escapeHtml(company.companyWebsite)}</strong></div>
+    <div class="detail-row"><span>Company Status</span><strong>${escapeHtml(company.status)}</strong></div>
+    <div class="detail-row"><span>Created Date</span><strong>${escapeHtml(formatDate(company.createdAt))}</strong></div>
   `;
 }
 
 async function openCompanyInfo() {
   clearBanner();
   await loadPrivacyStatus();
-  resetPinInputs();
-  openModal(companyInfoModal);
   setActiveNav("companyInfoButton");
 
-  if (state.privacyMode === "public") {
-    const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info`, {
-      headers: authHeaders(),
-    });
-    renderCompanyDetails(result.company);
-    showCompanyInfoPanel("details");
-  } else if (state.hasPin) {
-    showCompanyInfoPanel("verify");
-  } else {
-    showCompanyInfoPanel("setup");
-  }
-}
-
-async function savePrivacyMode(mode) {
-  const payload = { privacyMode: mode };
-
-  if (mode === "private") {
-    payload.pin = pinValue.value;
-    payload.confirmPin = confirmPinValue.value;
+  if (state.privacyMode === "private" && state.hasPin) {
+    state.verifyPinDraft = "";
+    pinVerifyValue.value = "";
+    openModal(pinVerifyModal);
+    return;
   }
 
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/privacy`, {
-    method: "POST",
-    headers: authHeaders("application/json"),
-    body: JSON.stringify(payload),
-  });
-
-  state.privacyMode = result.privacyMode;
-  state.hasPin = Boolean(result.hasPin);
-  showBanner("success", result.message);
-
-  if (state.privacyMode === "public") {
-    const info = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info`, {
-      headers: authHeaders(),
-    });
-    renderCompanyDetails(info.company);
-    showCompanyInfoPanel("details");
-  } else {
-    resetPinInputs();
-    showCompanyInfoPanel("verify");
-  }
-}
-
-async function verifyAndOpenCompanyInfo() {
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/private/company-info/access`, {
-    method: "POST",
-    headers: authHeaders("application/json"),
-    body: JSON.stringify({ pin: verifyPinValue.value }),
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/company-info`, {
+    headers: authHeaders(),
   });
 
   renderCompanyDetails(result.company);
-  showCompanyInfoPanel("details");
-  verifyPinValue.value = "";
-  showBanner("success", "Company info unlocked successfully.");
+  openModal(companyInfoModal);
 }
 
-function appendPinValue(value) {
-  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
-  if (target.value.length >= 8) {
+async function setNotPrivateMode() {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/privacy/set-not-private`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({}),
+  });
+
+  await loadPrivacyStatus();
+  showBanner("success", result.message || "Private mode disabled.");
+}
+
+function openPinCreation(stage) {
+  state.pinStage = stage;
+  if (stage === "create") {
+    state.pinDraft = "";
+    pinModalTitle.textContent = "Create Private PIN";
+    pinInputLabel.textContent = "Enter PIN";
+    pinInputValue.value = "";
+  } else {
+    state.pinConfirmDraft = "";
+    pinModalTitle.textContent = "Confirm Private PIN";
+    pinInputLabel.textContent = "Confirm PIN";
+    pinInputValue.value = "";
+  }
+  openModal(pinSetupModal);
+}
+
+async function submitPinCreation() {
+  const currentValue = state.pinStage === "create" ? state.pinDraft : state.pinConfirmDraft;
+
+  if (!/^\d{4,6}$/.test(currentValue)) {
+    showBanner("error", "PIN must be 4 to 6 digits.");
     return;
   }
-  target.value += value;
+
+  if (state.pinStage === "create") {
+    closeModal(pinSetupModal);
+    openPinCreation("confirm");
+    return;
+  }
+
+  if (state.pinDraft !== state.pinConfirmDraft) {
+    showBanner("error", "PIN and confirm PIN must match.");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/privacy/set-private`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      pin: state.pinDraft,
+      confirmPin: state.pinConfirmDraft,
+    }),
+  });
+
+  closeModal(pinSetupModal);
+  await loadPrivacyStatus();
+  showBanner("success", result.message || "Private mode enabled");
 }
 
-function backspacePinValue() {
-  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
-  target.value = target.value.slice(0, -1);
+async function verifyPinAndOpenCompanyInfo() {
+  if (!/^\d{4,6}$/.test(state.verifyPinDraft)) {
+    showBanner("error", "PIN must be 4 to 6 digits.");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/privacy/verify-pin`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({ pin: state.verifyPinDraft }),
+  });
+
+  closeModal(pinVerifyModal);
+  renderCompanyDetails(result.company);
+  openModal(companyInfoModal);
+  showBanner("success", "Private mode unlocked successfully.");
 }
 
-function clearPinValue() {
-  const target = state.pinTarget === "confirm" ? confirmPinValue : pinValue;
-  target.value = "";
+function updatePinInputValue() {
+  pinInputValue.value = state.pinStage === "create" ? state.pinDraft : state.pinConfirmDraft;
 }
 
-function buildPinPad(container, onDigit, onSubmit) {
+function buildPinPad(container, inputGetter, inputSetter, onSubmit) {
   container.innerHTML = "";
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "Clear", "0", "Backspace", "Submit"];
 
@@ -661,17 +677,20 @@ function buildPinPad(container, onDigit, onSubmit) {
     button.textContent = key;
     button.addEventListener("click", async () => {
       if (/^\d$/.test(key)) {
-        onDigit(key);
+        const current = inputGetter();
+        if (current.length < 6) {
+          inputSetter(`${current}${key}`);
+        }
         return;
       }
 
       if (key === "Clear") {
-        clearPinValue();
+        inputSetter("");
         return;
       }
 
       if (key === "Backspace") {
-        backspacePinValue();
+        inputSetter(inputGetter().slice(0, -1));
         return;
       }
 
@@ -681,16 +700,13 @@ function buildPinPad(container, onDigit, onSubmit) {
   });
 }
 
-async function clearRecentFiles() {
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  state.recentFiles = [];
-  if (state.view === "recent") {
-    renderResultPanel();
+async function copyCurrentCode() {
+  if (!state.currentContent) {
+    return;
   }
-  showBanner("success", result.message || "Recent files cleared successfully.");
+
+  await navigator.clipboard.writeText(state.currentContent);
+  showBanner("success", "File copied successfully.");
 }
 
 function logout() {
@@ -708,9 +724,10 @@ async function initializeDashboard() {
 
   try {
     await loadCompanyProfile();
-    await loadRecentFiles();
+    await loadPrivacyStatus();
     renderTree();
-    renderResultPanel();
+    renderPreview();
+    renderNotifications();
   } catch (error) {
     localStorage.removeItem(TOKEN_KEY);
     showBanner("error", error.message || "Session expired.");
@@ -742,58 +759,61 @@ searchInput.addEventListener("keydown", async (event) => {
   }
 });
 
-document.getElementById("recentFilesButton").addEventListener("click", showRecentFiles);
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
-document.getElementById("headerCompanyInfoButton").addEventListener("click", openCompanyInfo);
 document.getElementById("closeCompanyInfoModalButton").addEventListener("click", () => closeModal(companyInfoModal));
+document.getElementById("closePinSetupModalButton").addEventListener("click", () => closeModal(pinSetupModal));
+document.getElementById("closePinVerifyModalButton").addEventListener("click", () => closeModal(pinVerifyModal));
 document.getElementById("settingsButton").addEventListener("click", () => openModal(settingsModal));
-document.getElementById("headerSettingsButton").addEventListener("click", () => openModal(settingsModal));
 document.getElementById("closeSettingsModalButton").addEventListener("click", () => closeModal(settingsModal));
 document.getElementById("settingsCompanyPrivacyButton").addEventListener("click", async () => {
   closeModal(settingsModal);
   await openCompanyInfo();
 });
-document.getElementById("clearRecentFilesButton").addEventListener("click", clearRecentFiles);
 document.getElementById("settingsLogoutButton").addEventListener("click", logout);
+document.getElementById("goBackButton").addEventListener("click", goBack);
+copyCodeButton.addEventListener("click", copyCurrentCode);
+document.getElementById("notificationButton").addEventListener("click", () => openModal(notificationModal));
+document.getElementById("closeNotificationModalButton").addEventListener("click", () => closeModal(notificationModal));
+document.getElementById("themeToggleButton").addEventListener("click", toggleTheme);
 document.getElementById("logoutButton").addEventListener("click", logout);
-goBackButton.addEventListener("click", goBack);
 
 themeSelect.addEventListener("change", () => {
   setTheme(themeSelect.value);
   showBanner("success", "Theme updated successfully.");
 });
 
-publicModeButton.addEventListener("click", async () => {
-  await savePrivacyMode("public");
+notPrivateModeButton.addEventListener("click", async () => {
+  await setNotPrivateMode();
 });
 
 privateModeButton.addEventListener("click", () => {
-  showCompanyInfoPanel("setup");
+  closeModal(companyInfoModal);
+  openPinCreation("create");
 });
 
-pinTargetButton.addEventListener("click", () => {
-  state.pinTarget = "pin";
-  pinTargetButton.classList.add("active-target");
-  confirmPinTargetButton.classList.remove("active-target");
-});
+buildPinPad(
+  document.getElementById("pinPad"),
+  () => (state.pinStage === "create" ? state.pinDraft : state.pinConfirmDraft),
+  (value) => {
+    if (state.pinStage === "create") {
+      state.pinDraft = value;
+    } else {
+      state.pinConfirmDraft = value;
+    }
+    updatePinInputValue();
+  },
+  submitPinCreation
+);
 
-confirmPinTargetButton.addEventListener("click", () => {
-  state.pinTarget = "confirm";
-  confirmPinTargetButton.classList.add("active-target");
-  pinTargetButton.classList.remove("active-target");
-});
-
-buildPinPad(document.getElementById("pinPad"), appendPinValue, async () => {
-  await savePrivacyMode("private");
-});
-
-buildPinPad(document.getElementById("verifyPinPad"), (digit) => {
-  if (verifyPinValue.value.length < 8) {
-    verifyPinValue.value += digit;
-  }
-}, async () => {
-  await verifyAndOpenCompanyInfo();
-});
+buildPinPad(
+  document.getElementById("verifyPinPad"),
+  () => state.verifyPinDraft,
+  (value) => {
+    state.verifyPinDraft = value;
+    pinVerifyValue.value = value;
+  },
+  verifyPinAndOpenCompanyInfo
+);
 
 window.addEventListener("click", (event) => {
   if (event.target === uploadModal) {
@@ -802,8 +822,17 @@ window.addEventListener("click", (event) => {
   if (event.target === companyInfoModal) {
     closeModal(companyInfoModal);
   }
+  if (event.target === pinSetupModal) {
+    closeModal(pinSetupModal);
+  }
+  if (event.target === pinVerifyModal) {
+    closeModal(pinVerifyModal);
+  }
   if (event.target === settingsModal) {
     closeModal(settingsModal);
+  }
+  if (event.target === notificationModal) {
+    closeModal(notificationModal);
   }
 });
 

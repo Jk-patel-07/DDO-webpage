@@ -33,7 +33,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/company-form", companyRoutes);
 app.use("/api/cfm", cfmRoutes);
-app.use("/api/cfm/private", cfmPrivateRoutes);
+app.use("/api/cfm", cfmPrivateRoutes);
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -57,6 +57,19 @@ app.get("/DDO-One-Form/frontend", (_req, res) => {
 
 app.get("/DDO-One-Form/frontend/", (_req, res) => {
   res.redirect("/DDO/ddo-one-form/");
+});
+
+app.get("/CFM", (_req, res) => {
+  res.redirect("/CFM/company-login.html");
+});
+app.get("/CFM/", (_req, res) => {
+  res.redirect("/CFM/company-login.html");
+});
+app.get("/cfm", (_req, res) => {
+  res.redirect("/CFM/company-login.html");
+});
+app.get("/cfm/", (_req, res) => {
+  res.redirect("/CFM/company-login.html");
 });
 
 if (require("fs").existsSync(websiteDistPath)) {

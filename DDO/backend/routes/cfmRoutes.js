@@ -247,6 +247,40 @@ router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), a
   }
 });
 
+router.post("/workspace/remove", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const targetPath = String(req.body.targetPath || "");
+    const { absolutePath, relativePath } = resolveWorkspacePath(req.user.companyMongoId, workspaceId, targetPath);
+
+    if (!relativePath) {
+      return res.status(400).json({ message: "Choose a file inside the workspace to remove." });
+    }
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ message: "File not found in this workspace." });
+    }
+
+    const stats = fs.statSync(absolutePath);
+    if (stats.isDirectory()) {
+      return res.status(400).json({ message: "Only files can be removed from the workspace list." });
+    }
+
+    fs.unlinkSync(absolutePath);
+    await saveRecentActivity(req.user.companyMongoId, relativePath, "file", "remove");
+
+    return res.json({
+      message: "File removed from workspace successfully.",
+      workspaceId,
+      removedPath: relativePath,
+      tree: listDirectoryTree(getWorkspaceRoot(req.user.companyMongoId, workspaceId)),
+      items: listDirectoryItems(getWorkspaceRoot(req.user.companyMongoId, workspaceId)),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to remove file from workspace." });
+  }
+});
+
 router.get("/open", async (req, res) => {
   try {
     const workspaceId = String(req.query.workspaceId || "");
