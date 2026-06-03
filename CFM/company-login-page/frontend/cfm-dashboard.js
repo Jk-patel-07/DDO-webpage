@@ -1,7 +1,22 @@
-const API_BASE_URL = window.location.origin;
+function resolveApiBaseUrl() {
+  const stored = localStorage.getItem("ddoApiBaseUrl");
+  if (stored) {
+    return String(stored).replace(/\/$/, "");
+  }
+
+  const { protocol, hostname, origin } = window.location;
+  if (protocol === "file:" || !hostname) {
+    return "http://localhost:8080";
+  }
+
+  return origin;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 const TOKEN_KEY = "ddoCompanyToken";
 const LOGIN_PATH = "./company-login.html";
 const THEME_KEY = "ddoCfmTheme";
+const EDIT_ACCESS_KEY = "ddoCfmEditAccess";
 
 const state = {
   token: localStorage.getItem(TOKEN_KEY) || "",
@@ -86,6 +101,10 @@ const companyDetailsModal = document.getElementById("companyDetailsModal");
 const logoutPasswordModal = document.getElementById("logoutPasswordModal");
 const logoutPasswordInput = document.getElementById("logoutPasswordInput");
 const openSidebarButton = document.getElementById("openSidebarButton");
+const companyEditPasswordInput = document.getElementById("companyEditPasswordInput");
+const companyEditPasswordSuccess = document.getElementById("companyEditPasswordSuccess");
+const companyEditPasswordError = document.getElementById("companyEditPasswordError");
+const verifyCompanyEditPasswordButton = document.getElementById("verifyCompanyEditPasswordButton");
 let bannerTimerId = 0;
 
 function pushNotification(message, kind = "info") {
@@ -238,6 +257,39 @@ function openModal(modal) {
 
 function closeModal(modal) {
   modal.classList.add("hidden");
+}
+
+function setInlineMessage(element, message = "", type = "success") {
+  element.textContent = message;
+  element.classList.toggle("hidden", !message);
+  element.classList.toggle("success", type === "success");
+  element.classList.toggle("error", type === "error");
+}
+
+function resetCompanyEditPasswordState() {
+  companyEditPasswordInput.value = "";
+  companyEditPasswordInput.type = "password";
+  verifyCompanyEditPasswordButton.disabled = false;
+  verifyCompanyEditPasswordButton.classList.remove("is-loading");
+  verifyCompanyEditPasswordButton.textContent = "Verify Password";
+  document.getElementById("toggleCompanyEditPasswordButton").setAttribute("aria-label", "Show password");
+  setInlineMessage(companyEditPasswordSuccess, "");
+  setInlineMessage(companyEditPasswordError, "");
+}
+
+async function parseJsonResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return {
+      success: false,
+      message: "Unexpected server response. Open CFM from the DDO backend URL (for example http://localhost:8080/CFM/).",
+    };
+  }
+
+  return response.json().catch(() => ({
+    success: false,
+    message: "Server error. Please try again.",
+  }));
 }
 
 function fileIconSvg(type) {
@@ -730,9 +782,15 @@ async function openEmployeeFilesModal() {
 }
 
 async function openCompanyDetailsModal() {
-  const details = await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/current`, {
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/current`, {
     headers: authHeaders(),
   });
+
+  if (result.success === false) {
+    throw new Error(result.message || "Failed to load company details.");
+  }
+
+  const details = result;
 
   document.getElementById("updateCompanyName").value = details.companyName || "";
   document.getElementById("updateCompanyEmail").value = details.companyEmail || "";
@@ -803,22 +861,107 @@ async function saveCompanyDetailsUpdate() {
 
 function openCompanyEditPasswordModal() {
   closeModal(settingsModal);
-  document.getElementById("companyEditPasswordInput").value = "";
+  resetCompanyEditPasswordState();
   openModal(companyEditPasswordModal);
 }
 
-async function verifyCompanyEditPassword() {
-  await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/verify-password`, {
-    method: "POST",
-    headers: authHeaders("application/json"),
-    body: JSON.stringify({
-      companyPassword: document.getElementById("companyEditPasswordInput").value,
-    }),
-  });
+function mapVerifyPasswordError(message = "") {
+  if (/wrong company password/i.test(message)) {
+    return "Wrong company password";
+  }
+  if (/authentication token is required|invalid or expired token|only company accounts can access|login required/i.test(message)) {
+    return "Login required";
+  }
+  if (/database connection failed/i.test(message)) {
+    return "Database connection failed";
+  }
+  return message || "Server error. Please try again.";
+}
 
-  state.companyEditUnlocked = true;
-  closeModal(companyEditPasswordModal);
-  await openCompanyDetailsModal();
+async function verifyCompanyEditPassword() {
+  console.log("Verify password clicked");
+  const password = companyEditPasswordInput.value.trim();
+  const companyToken = state.token;
+  const verifyUrl = `${API_BASE_URL}/api/cfm/company/edit/verify-password`;
+
+  setInlineMessage(companyEditPasswordSuccess, "");
+  setInlineMessage(companyEditPasswordError, "");
+
+  if (!companyToken) {
+    setInlineMessage(companyEditPasswordError, "Login required", "error");
+    return;
+  }
+
+  if (!password) {
+    setInlineMessage(companyEditPasswordError, "Company password is required.", "error");
+    return;
+  }
+
+  verifyCompanyEditPasswordButton.disabled = true;
+  verifyCompanyEditPasswordButton.classList.add("is-loading");
+  verifyCompanyEditPasswordButton.textContent = "Checking password...";
+
+  try {
+    console.log("API URL:", verifyUrl);
+    console.log("Token exists:", !!companyToken);
+
+    const response = await fetch(verifyUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${companyToken}`,
+      },
+      body: JSON.stringify({ password }),
+    });
+    console.log("Verify response status:", response.status);
+
+    const data = await parseJsonResponse(response);
+    console.log("Verify API response:", data);
+
+    if (!response.ok || data.success === false) {
+      setInlineMessage(companyEditPasswordError, mapVerifyPasswordError(data.message), "error");
+      return;
+    }
+
+    if (data.success !== true) {
+      setInlineMessage(companyEditPasswordError, "Wrong company password", "error");
+      return;
+    }
+
+    setInlineMessage(companyEditPasswordSuccess, data.message || "Password verified", "success");
+    state.companyEditUnlocked = true;
+    sessionStorage.setItem(
+      EDIT_ACCESS_KEY,
+      JSON.stringify({
+        allowed: true,
+        verifiedAt: Date.now(),
+      })
+    );
+    console.log("Opening DDO One edit form");
+    window.setTimeout(async () => {
+      try {
+        closeModal(companyEditPasswordModal);
+        window.location.href = "/cfm/company-details-edit";
+      } catch (error) {
+        console.log("Opening DDO One edit form failed:", error.message);
+        openModal(companyEditPasswordModal);
+        setInlineMessage(
+          companyEditPasswordError,
+          /database connection failed/i.test(error.message)
+            ? "Database connection failed"
+            : "Password verified, but edit form failed to open.",
+          "error"
+        );
+      }
+    }, 320);
+  } catch (error) {
+    console.log("Verify API response:", { error: error.message });
+    setInlineMessage(companyEditPasswordError, mapVerifyPasswordError(error.message), "error");
+  } finally {
+    verifyCompanyEditPasswordButton.disabled = false;
+    verifyCompanyEditPasswordButton.classList.remove("is-loading");
+    verifyCompanyEditPasswordButton.textContent = "Verify Password";
+  }
 }
 
 function openLogoutPasswordModal() {
@@ -1091,8 +1234,43 @@ document.getElementById("saveEmployeeButton").addEventListener("click", saveEmpl
 document.getElementById("resetEmployeeButton").addEventListener("click", resetEmployeeForm);
 document.getElementById("closeCompanyDetailsModalButton").addEventListener("click", () => closeModal(companyDetailsModal));
 document.getElementById("saveCompanyDetailsButton").addEventListener("click", saveCompanyDetailsUpdate);
-document.getElementById("closeCompanyEditPasswordModalButton").addEventListener("click", () => closeModal(companyEditPasswordModal));
-document.getElementById("verifyCompanyEditPasswordButton").addEventListener("click", verifyCompanyEditPassword);
+document.getElementById("closeCompanyEditPasswordModalButton").addEventListener("click", () => {
+  resetCompanyEditPasswordState();
+  closeModal(companyEditPasswordModal);
+});
+verifyCompanyEditPasswordButton.addEventListener("click", verifyCompanyEditPassword);
+companyEditPasswordInput.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    await verifyCompanyEditPassword();
+  }
+});
+document.getElementById("toggleCompanyEditPasswordButton").addEventListener("click", () => {
+  const nextType = companyEditPasswordInput.type === "password" ? "text" : "password";
+  companyEditPasswordInput.type = nextType;
+  document
+    .getElementById("toggleCompanyEditPasswordButton")
+    .setAttribute("aria-label", nextType === "password" ? "Show password" : "Hide password");
+});
+document.getElementById("resetCompanyPasswordLinkButton").addEventListener("click", async () => {
+  try {
+    if (!state.company?.companyEmail) {
+      throw new Error("Company email not found.");
+    }
+
+    const response = await apiRequest(`${API_BASE_URL}/api/company/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ companyEmail: state.company.companyEmail }),
+    });
+
+    setInlineMessage(companyEditPasswordSuccess, response.message || "Reset password email sent.", "success");
+    setInlineMessage(companyEditPasswordError, "");
+    window.open(`${API_BASE_URL}/reset-company-password.html`, "_blank", "noopener");
+  } catch (error) {
+    setInlineMessage(companyEditPasswordError, error.message || "Server error. Please try again.", "error");
+  }
+});
 document.getElementById("closeLogoutPasswordModalButton").addEventListener("click", () => closeModal(logoutPasswordModal));
 document.getElementById("confirmLogoutButton").addEventListener("click", confirmLogoutWithPassword);
 
@@ -1157,6 +1335,7 @@ window.addEventListener("click", (event) => {
     closeModal(employeeFilesModal);
   }
   if (event.target === companyEditPasswordModal) {
+    resetCompanyEditPasswordState();
     closeModal(companyEditPasswordModal);
   }
   if (event.target === companyDetailsModal) {

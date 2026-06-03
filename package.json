@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backend": "npm --prefix DDO/backend start",
+    "backend:install": "npm --prefix DDO/backend install"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",

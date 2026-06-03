@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DDO One - Company Details Edit</title>
+    <link rel="stylesheet" href="/CFM/company-details-edit.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <div class="hero-topline">
+            <p class="eyebrow">DDO Animation</p>
+            <span class="mode-badge">Edit Mode</span>
+          </div>
+          <h1>DDO One - Company Details Edit</h1>
+          <p class="hero-copy">
+            Update your existing DDO company information in full-page edit mode. Changes are sent as an approval request and are not applied until the DDO admin approves them.
+          </p>
+        </div>
+        <a class="nav-link secondary-link" href="/CFM/cfm-dashboard.html">Back to CFM</a>
+      </header>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <p class="section-label">Edit Request Form</p>
+            <h2>DDO One</h2>
+          </div>
+          <p class="muted">All submitted edits are reviewed before your company profile is updated.</p>
+        </div>
+
+        <div class="banner success" id="successBanner" role="status" aria-live="polite"></div>
+        <div class="banner error" id="errorBanner" role="alert" aria-live="assertive"></div>
+
+        <form id="companyEditForm" novalidate>
+          <section class="form-section">
+            <h3>Company Details</h3>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Company name *</span>
+                <input type="text" name="companyName" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>Company website URL *</span>
+                <input type="url" name="companyWebsite" placeholder="https://example.com" data-required="true" data-validate="url" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+            <label class="field">
+              <span>Company details *</span>
+              <textarea name="companyDetails" rows="4" data-required="true"></textarea>
+              <small class="error-text"></small>
+            </label>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Company email *</span>
+                <input type="email" name="companyEmail" data-required="true" data-validate="email" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>Company phone number *</span>
+                <input type="tel" name="companyPhone" inputmode="numeric" data-required="true" data-validate="phone" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h3>Head Office Details</h3>
+            <label class="field">
+              <span>Head office address *</span>
+              <input type="text" name="officeDetails" data-required="true" />
+              <small class="error-text"></small>
+            </label>
+            <div class="grid two-col">
+              <label class="field">
+                <span>City *</span>
+                <input type="text" name="headOfficeCity" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>State *</span>
+                <input type="text" name="headOfficeState" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Country *</span>
+                <input type="text" name="headOfficeCountry" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>Pincode *</span>
+                <input type="text" name="headOfficePincode" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h3>Person Filling This Form</h3>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Filler / person name *</span>
+                <input type="text" name="personName" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>Filler / person email *</span>
+                <input type="email" name="personEmail" data-required="true" data-validate="email" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Filler / person phone *</span>
+                <input type="tel" name="personPhone" inputmode="numeric" data-required="true" data-validate="phone" />
+                <small class="error-text"></small>
+              </label>
+              <label class="field">
+                <span>Company position *</span>
+                <input type="text" name="personPosition" data-required="true" />
+                <small class="error-text"></small>
+              </label>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <h3>Company Uploads</h3>
+            <p class="section-copy">Upload new files only if you want to replace the existing company assets.</p>
+            <div class="grid two-col">
+              <label class="field">
+                <span>Company logo</span>
+                <input type="file" name="companyLogo" accept=".png,.jpg,.jpeg,.webp,.svg" />
+              </label>
+              <label class="field">
+                <span>Company photo</span>
+                <input type="file" name="companyPhoto" accept=".png,.jpg,.jpeg,.webp" />
+              </label>
+            </div>
+            <label class="field">
+              <span>Company registered proof</span>
+              <input type="file" name="companyProof" accept=".png,.jpg,.jpeg,.pdf,.webp" />
+            </label>
+          </section>
+
+          <div class="submit-row">
+            <button type="submit" id="submitButton">Submit Edit Request</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <script src="/CFM/company-details-edit.js"></script>
+  </body>
+</html>

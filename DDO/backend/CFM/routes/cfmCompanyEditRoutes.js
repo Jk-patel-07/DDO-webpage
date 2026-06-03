@@ -225,40 +225,73 @@ router.use(authMiddleware, requireCompanyRole);
 
 router.post("/verify-password", async (req, res) => {
   try {
-    const companyPassword = String(req.body.companyPassword || "");
+    console.log("CFM verify password route hit");
+    console.log("Auth user:", req.user);
+    const companyPassword = String(req.body.password || req.body.companyPassword || "");
     if (!companyPassword) {
-      return res.status(400).json({ message: "Company password is required." });
+      return res.status(400).json({ success: false, message: "Company password is required." });
     }
 
-    const company = await Company.findById(req.user.companyMongoId).select("passwordHash");
+    if (!req.user?.companyMongoId) {
+      return res.status(401).json({ success: false, message: "Login required" });
+    }
+
+    let company;
+    try {
+      company = await Company.findById(req.user.companyMongoId).select("passwordHash");
+    } catch (dbError) {
+      if (/mongo|serverselectionerror|querysrv|econnrefused|enotfound/i.test(String(dbError.message || ""))) {
+        return res.status(500).json({ success: false, message: "Database connection failed" });
+      }
+      throw dbError;
+    }
+
+    console.log("Company user found:", !!company);
     if (!company) {
-      return res.status(404).json({ message: "Company not found." });
+      return res.status(404).json({ success: false, message: "Company not found." });
     }
 
     const passwordOk = await bcrypt.compare(companyPassword, company.passwordHash || "");
+    console.log("Password match:", passwordOk);
     if (!passwordOk) {
-      return res.status(401).json({ message: "Wrong password" });
+      return res.status(401).json({ success: false, message: "Wrong company password" });
     }
 
-    return res.json({ message: "Password verified successfully." });
+    return res.json({ success: true, message: "Password verified" });
   } catch (error) {
-    return res.status(500).json({ message: error.message || "Password verification failed." });
+    if (/mongo|serverselectionerror|querysrv|econnrefused|enotfound/i.test(String(error.message || ""))) {
+      return res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+    return res.status(500).json({ success: false, message: "Server error. Please try again." });
   }
 });
 
 router.get("/current", async (req, res) => {
   try {
+    if (!req.user?.companyMongoId) {
+      return res.status(401).json({ success: false, message: "Login required" });
+    }
+
     const company = await Company.findById(req.user.companyMongoId).select(
       "companyName companyWebsite companyDetails companyEmail companyPhone officeDetails headOfficeCity headOfficeState headOfficeCountry headOfficePincode filledByName filledByEmail filledByPhone personName personEmail personPhone personPosition uploadedFiles"
     );
 
     if (!company) {
-      return res.status(404).json({ message: "Company not found." });
+      return res.status(404).json({ success: false, message: "Company not found." });
     }
 
-    return res.json(buildCompanySnapshot(company));
+    return res.json({
+      success: true,
+      ...buildCompanySnapshot(company),
+    });
   } catch (error) {
-    return res.status(500).json({ message: error.message || "Failed to load current company details." });
+    if (/mongo|serverselectionerror|querysrv|econnrefused|enotfound/i.test(String(error.message || ""))) {
+      return res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to load current company details.",
+    });
   }
 });
 

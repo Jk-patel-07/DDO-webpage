@@ -53,6 +53,18 @@ app.get("/company/reset-password", (_req, res) => {
   res.redirect("/reset-company-password.html");
 });
 
+app.get("/cfm/company-details-edit", (_req, res) => {
+  res.sendFile(path.join(cfmFrontendPath, "company-details-edit.html"));
+});
+
+app.get("/CFM/company-details-edit", (_req, res) => {
+  res.redirect("/cfm/company-details-edit");
+});
+
+app.get("/ddo-one/edit", (_req, res) => {
+  res.sendFile(path.join(cfmFrontendPath, "company-details-edit.html"));
+});
+
 app.get("/DDO-One-Form/frontend", (_req, res) => {
   res.redirect("/DDO/ddo-one-form/");
 });
@@ -83,14 +95,29 @@ if (require("fs").existsSync(websiteDistPath)) {
 }
 
 async function startServer() {
+  if (!process.env.MONGO_URI) {
+    console.error("Missing MONGO_URI in DDO/backend/.env");
+    console.error("Copy DDO/backend/.env.example to .env and set your MongoDB connection string.");
+    process.exit(1);
+  }
+
+  if (!process.env.JWT_SECRET) {
+    console.error("Missing JWT_SECRET in DDO/backend/.env");
+    process.exit(1);
+  }
+
   try {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected successfully.");
     app.listen(port, () => {
       console.log(`DDO backend running on http://localhost:${port}`);
+      console.log(`Health check: http://localhost:${port}/api/health`);
+      console.log(`CFM login:    http://localhost:${port}/CFM/company-login.html`);
+      console.log(`CFM dashboard: http://localhost:${port}/CFM/cfm-dashboard.html`);
     });
   } catch (error) {
     console.error("Failed to start server:", error.message);
+    console.error("Fix: check MONGO_URI in DDO/backend/.env and your internet/VPN, then run start-backend.bat again.");
     process.exit(1);
   }
 }

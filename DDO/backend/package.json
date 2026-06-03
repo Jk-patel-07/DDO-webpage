@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "check": "node -e \"require('dotenv').config(); console.log(process.env.PORT||8080, process.env.MONGO_URI?'mongo ok':'no MONGO_URI', process.env.JWT_SECRET?'jwt ok':'no JWT_SECRET')\""
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

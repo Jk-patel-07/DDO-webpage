@@ -355,7 +355,8 @@ button {
 .employee-form textarea,
 .company-update-form input,
 .company-update-form textarea,
-#logoutPasswordInput {
+#logoutPasswordInput,
+#companyEditPasswordInput {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -663,6 +664,164 @@ button {
 
 .modal-card.small {
   width: min(420px, 100%);
+}
+
+.password-verify-card {
+  border-color: color-mix(in srgb, var(--text) 12%, var(--line));
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--text) 6%, transparent), transparent 34%),
+    var(--panel);
+}
+
+.password-verify-copy {
+  margin: 4px 0 0;
+}
+
+.password-input-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 0 10px 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel-strong) 92%, transparent);
+}
+
+#companyEditPasswordInput {
+  border: 0;
+  background: transparent;
+  padding: 0 10px;
+}
+
+#companyEditPasswordInput:focus {
+  outline: none;
+  border: 0;
+}
+
+.input-ghost-button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-ghost-button:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  color: var(--text);
+}
+
+.input-ghost-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.inline-feedback {
+  margin-top: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inline-feedback.hidden {
+  display: none;
+}
+
+.inline-feedback.success {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  border-color: color-mix(in srgb, var(--success) 25%, var(--line-soft));
+}
+
+.inline-feedback.error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--line-soft));
+}
+
+#companyEditPasswordModal .modal-actions {
+  justify-content: flex-start;
+}
+
+.verify-password-btn {
+  width: auto;
+  min-width: 160px;
+  max-width: 100%;
+  padding: 10px 18px;
+  border-radius: 12px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.verify-password-btn:hover {
+  background: #1a1a1a;
+  border-color: #555;
+}
+
+.verify-password-btn.is-loading,
+.verify-password-btn[disabled] {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+body[data-theme="light"] .verify-password-btn {
+  background: #111;
+  color: #fff;
+  border-color: #333;
+}
+
+body[data-theme="light"] .verify-password-btn:hover {
+  background: #1a1a1a;
+  border-color: #555;
+}
+
+.password-help-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.password-help-text {
+  color: var(--muted);
+}
+
+.text-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  padding: 0;
+  text-align: left;
+  font-size: 13px;
+}
+
+.text-link-button:hover {
+  color: var(--text);
+}
+
+.reset-link-button {
+  color: #3b82f6;
+}
+
+.reset-link-button:hover {
+  color: #60a5fa;
+  text-decoration: underline;
 }
 
 .modal-card.animated {
