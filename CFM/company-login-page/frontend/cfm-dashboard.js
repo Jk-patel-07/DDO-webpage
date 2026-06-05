@@ -104,6 +104,11 @@ const copyCodeButton = document.getElementById("copyCodeButton");
 const previewDropdownMenu = document.getElementById("previewDropdownMenu");
 const searchPopup = document.getElementById("searchPopup");
 const searchPopupResults = document.getElementById("searchPopupResults");
+const clearSearchButton = document.getElementById("clearSearchButton");
+const voiceSearchButton = document.getElementById("voiceSearchButton");
+const searchListeningStatus = document.getElementById("searchListeningStatus");
+const cfmSearchBar = document.getElementById("cfmSearchBar");
+let voiceRecognition = null;
 const fileInfoPopup = document.getElementById("fileInfoPopup");
 const fileInfoPopupBody = document.getElementById("fileInfoPopupBody");
 const themeSelect = document.getElementById("themeSelect");
@@ -236,7 +241,104 @@ function closeCommitPopup() {
   commitPopup.classList.add("hidden");
 }
 
+function getSearchEmptyStateMessage() {
+  if (!state.workspaceId) {
+    return "Open a workspace to search files.";
+  }
+  if (!searchInput.value.trim()) {
+    return "Search files in the current workspace.";
+  }
+  return "No matching coding files found.";
+}
+
+function renderSearchEmptyState() {
+  searchPopupResults.innerHTML = `<div class="empty-state">${getSearchEmptyStateMessage()}</div>`;
+}
+
+function syncSearchClearButton() {
+  clearSearchButton.classList.toggle("hidden", !searchInput.value.trim());
+}
+
+function setVoiceListening(active) {
+  cfmSearchBar?.classList.toggle("is-listening", active);
+  voiceSearchButton?.classList.toggle("is-active", active);
+  searchListeningStatus?.classList.toggle("hidden", !active);
+}
+
+function stopVoiceSearch() {
+  if (voiceRecognition) {
+    try {
+      voiceRecognition.stop();
+    } catch (_error) {
+      // Recognition may already be stopped.
+    }
+    voiceRecognition = null;
+  }
+  setVoiceListening(false);
+}
+
+function getSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  return SpeechRecognition ? new SpeechRecognition() : null;
+}
+
+async function startVoiceSearch() {
+  const recognition = getSpeechRecognition();
+  if (!recognition) {
+    showBanner("error", "Voice search is not supported in this browser.");
+    return;
+  }
+
+  stopVoiceSearch();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = "en-IN";
+  recognition.onstart = () => setVoiceListening(true);
+  recognition.onend = () => setVoiceListening(false);
+  recognition.onerror = () => setVoiceListening(false);
+  recognition.onresult = async (event) => {
+    const transcript = event.results[0]?.[0]?.transcript?.trim();
+    if (!transcript) {
+      return;
+    }
+    searchInput.value = transcript;
+    syncSearchClearButton();
+    await runSearch({ keepPopupState: true, silent: true });
+  };
+
+  voiceRecognition = recognition;
+  try {
+    recognition.start();
+  } catch (error) {
+    setVoiceListening(false);
+    showBanner("error", "Could not start voice search. Try again.");
+  }
+}
+
+function searchItemTypeLabel(item) {
+  if (item.itemType === "folder") {
+    return "Folder";
+  }
+
+  const name = String(item.name || "");
+  if (!name.includes(".")) {
+    return "File";
+  }
+
+  return name.split(".").pop().toUpperCase();
+}
+
+function searchItemParentPath(relativePath = "") {
+  const parts = String(relativePath).split("/").filter(Boolean);
+  if (parts.length <= 1) {
+    return "workspace root";
+  }
+  parts.pop();
+  return parts.join("/");
+}
+
 function closeSearchPopup() {
+  stopVoiceSearch();
   searchPopup.classList.add("hidden");
 }
 
@@ -244,10 +346,13 @@ function openSearchPopup() {
   closeFileInfoPopup();
   previewDropdownMenu.classList.add("hidden");
   searchPopup.classList.remove("hidden");
+  syncSearchClearButton();
   if (!searchInput.value.trim()) {
-    searchPopupResults.innerHTML = `<div class="empty-state">${state.workspaceId ? "Search files in the current workspace." : "Open a workspace to search files."}</div>`;
+    renderSearchEmptyState();
   } else if (state.searchResults.length) {
     renderSearchPopupResults(state.searchResults);
+  } else {
+    renderSearchEmptyState();
   }
   searchInput.focus();
 }
@@ -589,16 +694,19 @@ function renderSearchPreview(items) {
 
 function renderSearchPopupResults(items) {
   if (!items.length) {
-    searchPopupResults.innerHTML = '<div class="empty-state">No matching coding files found.</div>';
+    renderSearchEmptyState();
     return;
   }
 
   searchPopupResults.innerHTML = items
     .map(
       (item) => `
-        <button class="search-result-item" type="button" data-open-search-path="${escapeHtml(item.relativePath)}" data-open-search-type="${escapeHtml(item.itemType)}">
-          <strong>${escapeHtml(item.name || item.relativePath)}</strong>
-          <span class="search-result-path">${escapeHtml(item.relativePath || "")}</span>
+        <button class="search-result-row" type="button" data-open-search-path="${escapeHtml(item.relativePath)}" data-open-search-type="${escapeHtml(item.itemType)}">
+          <span class="search-result-icon">${fileIconSvg(item.itemType)}</span>
+          <span class="search-result-main">
+            <span class="search-result-name">${escapeHtml(item.name || item.relativePath)}</span>
+            <span class="search-result-meta">${escapeHtml(searchItemParentPath(item.relativePath))} · ${escapeHtml(searchItemTypeLabel(item))}</span>
+          </span>
         </button>
       `
     )
@@ -1250,15 +1358,18 @@ async function handleFileSelection(fileList, isFolderMode) {
   await uploadWorkspace(allowedFiles, relativePaths);
 }
 
-async function runSearch() {
+async function runSearch(options = {}) {
   if (!state.workspaceId) {
-    showBanner("error", "Open a file or folder first.");
+    renderSearchEmptyState();
+    if (!options.silent) {
+      showBanner("error", "Open a file or folder first.");
+    }
     return;
   }
 
   const query = searchInput.value.trim();
   if (!query) {
-    showBanner("error", "Enter a file name to search.");
+    renderSearchEmptyState();
     return;
   }
 
@@ -1273,8 +1384,10 @@ async function runSearch() {
 
   state.searchResults = result.results || [];
   renderSearchPopupResults(state.searchResults);
-  openSearchPopup();
-  setActiveNav("searchFilesButton");
+  if (!options.keepPopupState) {
+    openSearchPopup();
+    setActiveNav("searchFilesButton");
+  }
 }
 
 async function loadPrivacyStatus() {
@@ -1816,22 +1929,38 @@ document.getElementById("searchPopupButton").addEventListener("click", () => {
   openSearchPopup();
 });
 document.getElementById("closeSearchPopupButton").addEventListener("click", closeSearchPopup);
+clearSearchButton.addEventListener("click", async () => {
+  searchInput.value = "";
+  state.searchResults = [];
+  syncSearchClearButton();
+  renderSearchEmptyState();
+  searchInput.focus();
+});
+voiceSearchButton.addEventListener("click", async () => {
+  if (voiceRecognition) {
+    stopVoiceSearch();
+    return;
+  }
+  await startVoiceSearch();
+});
 searchInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
-    await runSearch();
+    await runSearch({ keepPopupState: true });
   }
 });
 searchInput.addEventListener("input", async () => {
+  syncSearchClearButton();
   if (!searchInput.value.trim()) {
-    searchPopupResults.innerHTML = '<div class="empty-state">Search files in the current workspace.</div>';
     state.searchResults = [];
+    renderSearchEmptyState();
     return;
   }
   if (!state.workspaceId) {
+    renderSearchEmptyState();
     return;
   }
-  await runSearch();
+  await runSearch({ keepPopupState: true, silent: true });
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);

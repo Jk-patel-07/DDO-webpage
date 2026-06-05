@@ -283,15 +283,29 @@
           <span>&times;</span>
         </button>
       </div>
-      <div class="floating-tool-body">
-        <div class="search-shell popup-search-shell">
-          <span class="search-icon" aria-hidden="true">
+      <div class="floating-tool-body search-popup-body">
+        <div class="cfm-search-bar" id="cfmSearchBar">
+          <span class="cfm-search-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-3.5-3.5"></path></svg>
           </span>
-          <input id="searchInput" type="search" placeholder="Search files..." />
+          <input
+            id="searchInput"
+            class="cfm-search-input"
+            type="text"
+            placeholder="Search files..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="cfm-search-action hidden" id="clearSearchButton" type="button" aria-label="Clear search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+          </button>
+          <button class="cfm-search-action cfm-search-voice-btn" id="voiceSearchButton" type="button" aria-label="Voice search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M8 22h8"/></svg>
+          </button>
         </div>
+        <p class="cfm-search-listening hidden" id="searchListeningStatus">Listening...</p>
         <div class="search-popup-results" id="searchPopupResults">
-          <div class="empty-state">Search files in the current workspace.</div>
+          <div class="empty-state">Open a workspace to search files.</div>
         </div>
       </div>
     </aside>
