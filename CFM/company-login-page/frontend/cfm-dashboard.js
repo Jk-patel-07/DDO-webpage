@@ -917,6 +917,58 @@ async function openWorkspaceTarget(targetPath = "") {
   }
 }
 
+function filterAllowedWorkspaceFiles(fileList, isFolderMode = false) {
+  const allowedFiles = [];
+  const relativePaths = [];
+
+  Array.from(fileList || []).forEach((file) => {
+    const relativePath = isFolderMode ? file.webkitRelativePath || file.name : file.name;
+    const lowerPath = relativePath.toLowerCase();
+    const allowed = lowerPath.endsWith(".env.example") || allowedExtensions.some((ext) => lowerPath.endsWith(ext));
+
+    if (allowed) {
+      allowedFiles.push(file);
+      relativePaths.push(relativePath);
+    }
+  });
+
+  return { allowedFiles, relativePaths };
+}
+
+function syncAddFilesButton() {
+  const addFilesButton = document.getElementById("addFilesButton");
+  if (addFilesButton) {
+    addFilesButton.disabled = !state.workspaceId;
+  }
+}
+
+async function addFilesToWorkspace(files, relativePaths) {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a file or folder first.");
+    return;
+  }
+
+  clearBanner();
+  const formData = new FormData();
+  formData.append("workspaceId", state.workspaceId);
+
+  files.forEach((file, index) => {
+    formData.append("workspaceFiles", file);
+    formData.append("relativePaths", relativePaths[index]);
+  });
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/workspace/add`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData,
+  });
+
+  state.tree = result.tree || [];
+  renderTree();
+  syncAddFilesButton();
+  showBanner("success", result.message || "Files added to workspace.");
+}
+
 async function uploadWorkspace(files, relativePaths) {
   clearBanner();
   const formData = new FormData();
@@ -952,6 +1004,7 @@ async function uploadWorkspace(files, relativePaths) {
   pushView("workspace");
   renderTree();
   renderPreview();
+  syncAddFilesButton();
   workspaceMeta.textContent = `${state.workspaceLabel} is loaded with coding files only.`;
   setActiveNav("openWorkspaceButton");
   showBanner("success", result.message || "Workspace uploaded successfully.");
@@ -1336,19 +1389,7 @@ async function handleFileSelection(fileList, isFolderMode) {
     return;
   }
 
-  const allowedFiles = [];
-  const relativePaths = [];
-
-  files.forEach((file) => {
-    const relativePath = isFolderMode ? file.webkitRelativePath || file.name : file.name;
-    const lowerPath = relativePath.toLowerCase();
-    const allowed = lowerPath.endsWith(".env.example") || allowedExtensions.some((ext) => lowerPath.endsWith(ext));
-
-    if (allowed) {
-      allowedFiles.push(file);
-      relativePaths.push(relativePath);
-    }
-  });
+  const { allowedFiles, relativePaths } = filterAllowedWorkspaceFiles(files, isFolderMode);
 
   if (!allowedFiles.length) {
     showBanner("error", "Choose coding files like .html, .css, .js, .json, .md, .py, or .php.");
@@ -1356,6 +1397,22 @@ async function handleFileSelection(fileList, isFolderMode) {
   }
 
   await uploadWorkspace(allowedFiles, relativePaths);
+}
+
+async function handleAddFilesSelection(fileList) {
+  const files = Array.from(fileList || []);
+  if (!files.length) {
+    return;
+  }
+
+  const { allowedFiles, relativePaths } = filterAllowedWorkspaceFiles(files, false);
+
+  if (!allowedFiles.length) {
+    showBanner("error", "Choose coding files like .html, .css, .js, .json, .md, .py, or .php.");
+    return;
+  }
+
+  await addFilesToWorkspace(allowedFiles, relativePaths);
 }
 
 async function runSearch(options = {}) {
@@ -1901,6 +1958,7 @@ async function initializeDashboard() {
     renderTree();
     renderPreview();
     renderNotifications();
+    syncAddFilesButton();
   } catch (error) {
     localStorage.removeItem(TOKEN_KEY);
     showBanner("error", error.message || "Session expired.");
@@ -1919,6 +1977,17 @@ document.getElementById("selectFilesButton").addEventListener("click", () => fil
 document.getElementById("selectFolderButton").addEventListener("click", () => folderInput.click());
 fileInput.addEventListener("change", async () => handleFileSelection(fileInput.files, false));
 folderInput.addEventListener("change", async () => handleFileSelection(folderInput.files, true));
+document.getElementById("addFilesButton").addEventListener("click", () => {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a file or folder first.");
+    return;
+  }
+  document.getElementById("addFilesInput").click();
+});
+document.getElementById("addFilesInput").addEventListener("change", async (event) => {
+  await handleAddFilesSelection(event.target.files);
+  event.target.value = "";
+});
 
 document.getElementById("searchFilesButton").addEventListener("click", async () => {
   setActiveNav("searchFilesButton");

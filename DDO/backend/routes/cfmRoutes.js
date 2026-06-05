@@ -412,6 +412,67 @@ router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), a
   }
 });
 
+router.post("/workspace/add", workspaceUpload.array("workspaceFiles", 500), async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    if (!workspaceId) {
+      return res.status(400).json({ message: "Workspace ID is required." });
+    }
+
+    const files = req.files || [];
+    if (!files.length) {
+      return res.status(400).json({ message: "Choose at least one coding file." });
+    }
+
+    const workspaceRoot = getWorkspaceRoot(req.user.companyMongoId, workspaceId);
+    if (!fs.existsSync(workspaceRoot)) {
+      return res.status(404).json({ message: "Workspace not found." });
+    }
+
+    const rawRelativePaths = Array.isArray(req.body.relativePaths)
+      ? req.body.relativePaths
+      : req.body.relativePaths
+        ? [req.body.relativePaths]
+        : [];
+
+    let savedFiles = 0;
+
+    for (const [index, file] of files.entries()) {
+      const relativePath = normalizeRelativePath(rawRelativePaths[index] || file.originalname);
+      if (!isAllowedFile(relativePath)) {
+        continue;
+      }
+
+      const outputPath = path.join(workspaceRoot, relativePath);
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      fs.writeFileSync(outputPath, file.buffer);
+      savedFiles += 1;
+
+      await createActivityRecord(req, {
+        workspaceId,
+        filePath: relativePath,
+        fileName: file.originalname,
+        action: "added",
+        oldContent: "",
+        newContent: file.buffer.toString("utf8"),
+      });
+    }
+
+    if (!savedFiles) {
+      return res.status(400).json({ message: "Only coding and project files are allowed." });
+    }
+
+    return res.json({
+      message: `${savedFiles} file${savedFiles === 1 ? "" : "s"} added to workspace.`,
+      workspaceId,
+      tree: listDirectoryTree(workspaceRoot),
+      items: listDirectoryItems(workspaceRoot),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to add files to workspace." });
+  }
+});
+
 router.post("/workspace/remove", async (req, res) => {
   try {
     const workspaceId = String(req.body.workspaceId || "");

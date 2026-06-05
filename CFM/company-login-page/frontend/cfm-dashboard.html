@@ -126,10 +126,13 @@
             <div class="workspace-body" id="workspaceBody">
               <section class="tree-panel">
                 <div class="section-head">
-                  <span>Files</span>
-                  <button class="nav-control-btn nav-control-btn--compact" id="toggleFilesPanelButton" type="button" aria-label="Hide files panel">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
-                  </button>
+                  <span class="section-head-title">Files</span>
+                  <div class="files-head-actions">
+                    <button class="files-add-button" id="addFilesButton" type="button" aria-label="Add files" disabled>+</button>
+                    <button class="nav-control-btn nav-control-btn--compact" id="toggleFilesPanelButton" type="button" aria-label="Hide files panel">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+                    </button>
+                  </div>
                 </div>
                 <div class="tree-root" id="treeRoot">
                   <div class="empty-state">No folder opened yet</div>
@@ -584,6 +587,13 @@
 
     <input id="fileInput" type="file" multiple hidden />
     <input id="folderInput" type="file" multiple webkitdirectory directory hidden />
+    <input
+      id="addFilesInput"
+      type="file"
+      multiple
+      hidden
+      accept=".html,.css,.js,.jsx,.ts,.tsx,.json,.md,.txt,.py,.java,.c,.cpp,.php,.env.example"
+    />
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
     <script src="./cfm-dashboard.js"></script>
