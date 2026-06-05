@@ -212,7 +212,6 @@ function setFilesPanelHidden(hidden) {
   state.filesPanelHidden = hidden;
   workspaceBody?.classList.toggle("files-hidden", hidden);
   document.getElementById("showFilesPanelButton").classList.toggle("hidden", !hidden);
-  document.getElementById("toggleFilesPanelIcon").textContent = hidden ? ">" : "<";
 }
 
 function updateCommitCounts() {
@@ -266,7 +265,9 @@ function setPreviewMaximized(enabled) {
   state.previewMaximized = enabled;
   workspaceBody.classList.toggle("preview-maximized", enabled);
   document.querySelector(".preview-panel")?.classList.toggle("maximized", enabled);
-  maximizePreviewIcon.innerHTML = enabled ? "&#9473;" : "&#9633;";
+  maximizePreviewIcon.innerHTML = enabled
+    ? '<path d="M9 14H5v4M15 10h4V6M21 14v4h-4M3 10V6h4"></path>'
+    : '<path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M3 15v4a2 2 0 0 0 2 2h4"></path>';
 }
 
 function renderNotifications() {
@@ -334,6 +335,13 @@ function toggleTheme() {
   showBanner("success", `Theme changed to ${nextTheme === "light" ? "white" : "dark"} mode.`);
 }
 
+function syncTopControls() {
+  const canGoBack = state.viewHistory.length > 0;
+  const goBackButton = document.getElementById("goBackButton");
+  goBackButton.disabled = !canGoBack;
+  goBackButton.classList.toggle("is-disabled", !canGoBack);
+}
+
 function setSidebarOpen(open) {
   sidebar.classList.toggle("open", open);
   openSidebarButton.classList.toggle("hidden", open);
@@ -352,6 +360,7 @@ function pushView(nextView) {
     state.viewHistory.push(state.view);
     state.view = nextView;
   }
+  syncTopControls();
 }
 
 function goBack() {
@@ -361,6 +370,7 @@ function goBack() {
 
   state.view = state.viewHistory.pop();
   renderPreview();
+  syncTopControls();
 }
 
 function setActiveNav(buttonId) {
@@ -695,6 +705,7 @@ function syncEditorScroll(editor) {
 }
 
 function renderPreview() {
+  syncTopControls();
   breadcrumbPath.textContent = buildBreadcrumb(state.currentPath);
   copyCodeButton.disabled = !state.currentContent;
   previewDropdownMenu.classList.add("hidden");

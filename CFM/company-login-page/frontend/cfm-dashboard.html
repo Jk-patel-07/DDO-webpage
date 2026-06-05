@@ -18,8 +18,10 @@
             <p class="sidebar-label">DDO Tool</p>
             <h1>CFM</h1>
           </div>
-          <button class="icon-button mobile-only" id="closeSidebarButton" type="button" aria-label="Close sidebar">
-            <span>&times;</span>
+          <button class="nav-control-btn nav-control-btn--compact mobile-only" id="closeSidebarButton" type="button" aria-label="Close sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12"></path>
+            </svg>
           </button>
         </div>
 
@@ -88,9 +90,19 @@
       </aside>
 
       <div class="content-shell">
-        <button class="icon-button floating-menu-button" id="openSidebarButton" type="button" aria-label="Open sidebar">
-          <span class="hamburger"></span>
-        </button>
+        <div class="top-control-bar" id="topControlBar">
+          <button class="nav-control-btn mobile-only" id="openSidebarButton" type="button" aria-label="Open sidebar">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="7" height="14" rx="1.5"></rect>
+              <path d="M13 8h8M13 12h8M13 16h5"></path>
+            </svg>
+          </button>
+          <button class="nav-control-btn" id="goBackButton" type="button" aria-label="Go back" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m15 6-6 6 6 6"></path>
+            </svg>
+          </button>
+        </div>
         <div class="banner success toast-banner" id="successBanner" role="status" aria-live="polite"></div>
         <div class="banner error toast-banner" id="errorBanner" role="alert" aria-live="assertive"></div>
 
@@ -102,7 +114,7 @@
                 <h3>Code files</h3>
               </div>
               <div class="workspace-head-actions">
-                <button class="icon-button subtle-icon-button" id="searchPopupButton" type="button" aria-label="Open search">
+                <button class="nav-control-btn nav-control-btn--compact" id="searchPopupButton" type="button" aria-label="Open search">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-3.5-3.5"></path></svg>
                 </button>
               </div>
@@ -115,8 +127,8 @@
               <section class="tree-panel">
                 <div class="section-head">
                   <span>Files</span>
-                  <button class="icon-button tiny-icon-button" id="toggleFilesPanelButton" type="button" aria-label="Hide files panel">
-                    <span id="toggleFilesPanelIcon">&lt;</span>
+                  <button class="nav-control-btn nav-control-btn--compact" id="toggleFilesPanelButton" type="button" aria-label="Hide files panel">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
                   </button>
                 </div>
                 <div class="tree-root" id="treeRoot">
@@ -130,19 +142,19 @@
                   <p class="preview-label">Preview</p>
                   <div class="preview-title-row">
                     <h4 id="previewFileName">No file selected</h4>
-                    <button class="icon-button tiny-icon-button subtle-icon-button" id="previewInfoButton" type="button" aria-label="View file details">
-                      <span>i</span>
+                    <button class="nav-control-btn nav-control-btn--compact" id="previewInfoButton" type="button" aria-label="View file details">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"></circle><path d="M12 11v5M12 8h.01"></path></svg>
                     </button>
                   </div>
                 </div>
                 <div class="preview-actions">
-                  <button class="icon-button subtle-icon-button" id="maximizePreviewButton" type="button" aria-label="Maximize preview">
-                    <span id="maximizePreviewIcon">&#9633;</span>
+                  <button class="nav-control-btn nav-control-btn--compact" id="maximizePreviewButton" type="button" aria-label="Maximize preview">
+                    <svg id="maximizePreviewIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M21 15v4a2 2 0 0 1-2 2h-4M3 15v4a2 2 0 0 0 2 2h4"></path></svg>
                   </button>
                   <button class="subtle-button" id="editCodeButton" type="button">Edit</button>
                   <button class="subtle-button" id="copyCodeButton" type="button">Copy</button>
                   <div class="preview-dropdown">
-                    <button class="icon-button" id="previewMenuButton" type="button" aria-label="Preview options">
+                    <button class="nav-control-btn nav-control-btn--compact" id="previewMenuButton" type="button" aria-label="Preview options">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.5"></circle><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle></svg>
                     </button>
                     <div class="preview-dropdown-menu hidden" id="previewDropdownMenu">
@@ -200,8 +212,8 @@
       </div>
     </div>
 
-    <button class="floating-files-toggle hidden" id="showFilesPanelButton" type="button" aria-label="Show files panel">
-      <span>&gt;</span>
+    <button class="nav-control-btn nav-control-btn--compact floating-files-toggle hidden" id="showFilesPanelButton" type="button" aria-label="Show files panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
     </button>
 
     <aside class="history-popup hidden" id="historyPopup">
@@ -273,9 +285,6 @@
       </div>
       <div class="floating-tool-body">
         <div class="search-shell popup-search-shell">
-          <button class="search-inline-button" id="goBackButton" type="button" aria-label="Go back">
-            <span class="back-arrow">&larr;</span>
-          </button>
           <span class="search-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-3.5-3.5"></path></svg>
           </span>
