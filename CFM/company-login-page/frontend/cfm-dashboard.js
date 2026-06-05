@@ -53,6 +53,8 @@ const state = {
   currentSummary: "",
   filesPanelHidden: false,
   pendingCommitPayload: null,
+  previewMaximized: false,
+  lastOpenedAt: "",
 };
 
 const allowedExtensions = [
@@ -97,8 +99,13 @@ const privacyStatusText = document.getElementById("privacyStatusText");
 const previewFileName = document.getElementById("previewFileName");
 const previewMeta = document.getElementById("previewMeta");
 const previewContent = document.getElementById("previewContent");
+const workspaceBody = document.getElementById("workspaceBody");
 const copyCodeButton = document.getElementById("copyCodeButton");
 const previewDropdownMenu = document.getElementById("previewDropdownMenu");
+const searchPopup = document.getElementById("searchPopup");
+const searchPopupResults = document.getElementById("searchPopupResults");
+const fileInfoPopup = document.getElementById("fileInfoPopup");
+const fileInfoPopupBody = document.getElementById("fileInfoPopupBody");
 const themeSelect = document.getElementById("themeSelect");
 const themeToggleText = document.getElementById("themeToggleText");
 const pinModalTitle = document.getElementById("pinModalTitle");
@@ -128,6 +135,7 @@ const historyPopup = document.getElementById("historyPopup");
 const historyPopupBody = document.getElementById("historyPopupBody");
 const commitPopup = document.getElementById("commitPopup");
 const commitPopupError = document.getElementById("commitPopupError");
+const maximizePreviewIcon = document.getElementById("maximizePreviewIcon");
 let bannerTimerId = 0;
 
 function pushNotification(message, kind = "info") {
@@ -202,7 +210,7 @@ function openHistoryPopup() {
 
 function setFilesPanelHidden(hidden) {
   state.filesPanelHidden = hidden;
-  document.querySelector(".workspace-body")?.classList.toggle("files-hidden", hidden);
+  workspaceBody?.classList.toggle("files-hidden", hidden);
   document.getElementById("showFilesPanelButton").classList.toggle("hidden", !hidden);
   document.getElementById("toggleFilesPanelIcon").textContent = hidden ? ">" : "<";
 }
@@ -227,6 +235,38 @@ function openCommitPopup() {
 
 function closeCommitPopup() {
   commitPopup.classList.add("hidden");
+}
+
+function closeSearchPopup() {
+  searchPopup.classList.add("hidden");
+}
+
+function openSearchPopup() {
+  closeFileInfoPopup();
+  previewDropdownMenu.classList.add("hidden");
+  searchPopup.classList.remove("hidden");
+  if (!searchInput.value.trim()) {
+    searchPopupResults.innerHTML = `<div class="empty-state">${state.workspaceId ? "Search files in the current workspace." : "Open a workspace to search files."}</div>`;
+  } else if (state.searchResults.length) {
+    renderSearchPopupResults(state.searchResults);
+  }
+  searchInput.focus();
+}
+
+function closeFileInfoPopup() {
+  fileInfoPopup.classList.add("hidden");
+}
+
+function openFileInfoPopup() {
+  closeSearchPopup();
+  fileInfoPopup.classList.remove("hidden");
+}
+
+function setPreviewMaximized(enabled) {
+  state.previewMaximized = enabled;
+  workspaceBody.classList.toggle("preview-maximized", enabled);
+  document.querySelector(".preview-panel")?.classList.toggle("maximized", enabled);
+  maximizePreviewIcon.innerHTML = enabled ? "&#9473;" : "&#9633;";
 }
 
 function renderNotifications() {
@@ -537,6 +577,43 @@ function renderSearchPreview(items) {
   `;
 }
 
+function renderSearchPopupResults(items) {
+  if (!items.length) {
+    searchPopupResults.innerHTML = '<div class="empty-state">No matching coding files found.</div>';
+    return;
+  }
+
+  searchPopupResults.innerHTML = items
+    .map(
+      (item) => `
+        <button class="search-result-item" type="button" data-open-search-path="${escapeHtml(item.relativePath)}" data-open-search-type="${escapeHtml(item.itemType)}">
+          <strong>${escapeHtml(item.name || item.relativePath)}</strong>
+          <span class="search-result-path">${escapeHtml(item.relativePath || "")}</span>
+        </button>
+      `
+    )
+    .join("");
+
+  searchPopupResults.querySelectorAll("[data-open-search-path]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openWorkspaceTarget(button.getAttribute("data-open-search-path") || "");
+      closeSearchPopup();
+    });
+  });
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!bytes || bytes < 1) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const normalized = bytes / 1024 ** unitIndex;
+  return `${normalized.toFixed(normalized >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 function renderEditablePreview(content) {
   const lines = content.split("\n");
   const lineNumbers = lines.map((_, index) => index + 1).join("\n");
@@ -622,6 +699,7 @@ function renderPreview() {
   copyCodeButton.disabled = !state.currentContent;
   previewDropdownMenu.classList.add("hidden");
   unsavedIndicator.classList.toggle("hidden", !(state.editMode && state.editDraft !== state.originalContent));
+  document.getElementById("previewInfoButton").disabled = !state.currentPath;
 
   if (state.view === "file") {
     previewFileName.textContent = state.currentFileName || "Selected file";
@@ -699,12 +777,14 @@ async function openWorkspaceTarget(targetPath = "") {
   state.currentContent = result.content || "";
   state.currentFileName = result.fileName || (result.targetPath ? result.targetPath.split("/").pop() : "");
   state.currentFileInfo = result.fileInfo || null;
+  state.lastOpenedAt = new Date().toISOString();
   state.editMode = false;
   state.editDraft = "";
   state.originalContent = state.currentContent || "";
   state.editUndoStack = [];
   state.editRedoStack = [];
   closeActivityPanel();
+  closeFileInfoPopup();
 
   if (result.tree && !state.currentPath) {
     state.tree = result.tree;
@@ -741,11 +821,14 @@ async function uploadWorkspace(files, relativePaths) {
   state.currentContent = "";
   state.currentFileName = "";
   state.currentFileInfo = null;
+  state.lastOpenedAt = "";
   state.searchResults = [];
   state.viewHistory = [];
   state.expandedPaths = new Set();
   state.editMode = false;
   closeActivityPanel();
+  closeSearchPopup();
+  closeFileInfoPopup();
 
   pushView("workspace");
   renderTree();
@@ -784,6 +867,7 @@ async function removeWorkspaceFile(targetPath) {
 
   renderTree();
   renderPreview();
+  closeFileInfoPopup();
   showBanner("success", result.message || "File deleted successfully.");
 }
 
@@ -1050,15 +1134,36 @@ async function explainCurrentChanges() {
   state.currentSummary = result.simpleSummary || "";
   openActivityPanel("Explain Changes", "Summary");
   activityFilterBar.classList.add("hidden");
+  const summaryLines = state.currentSummary
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const headline = summaryLines[0] || "This file was reviewed and saved without major content changes.";
+  const supportingLines = summaryLines.slice(1);
   activityPanelBody.innerHTML = `
-    <div class="summary-card">
-      <div class="summary-output">${escapeHtml(state.currentSummary)}</div>
-      <div class="activity-meta">${result.linesAdded || 0} lines added | ${result.linesRemoved || 0} lines removed</div>
-      <div class="summary-actions">
-        <button class="subtle-button" id="copySummaryButton" type="button">Copy Summary</button>
-        <button class="subtle-button" id="downloadSummaryButton" type="button">Download Summary</button>
+    <section class="summary-showcase">
+      <div class="summary-hero">
+        <div class="summary-title">
+          <p class="panel-label">Summary</p>
+          <h5>Explain Changes</h5>
+        </div>
+        <p class="summary-output">${escapeHtml(headline)}</p>
+        <div class="summary-meta">${result.linesAdded || 0} lines added · ${result.linesRemoved || 0} lines removed · Last updated ${escapeHtml(formatDate(new Date()))}</div>
       </div>
-    </div>
+      <div class="summary-card highlight">
+        <strong>Change summary</strong>
+        <div class="summary-output">${escapeHtml(state.currentSummary)}</div>
+        ${
+          supportingLines.length
+            ? `<ul class="summary-impact">${supportingLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
+            : ""
+        }
+        <div class="summary-actions">
+          <button class="subtle-button" id="copySummaryButton" type="button">Copy Summary</button>
+          <button class="subtle-button" id="downloadSummaryButton" type="button">Download Summary</button>
+        </div>
+      </div>
+    </section>
   `;
 
   document.getElementById("copySummaryButton").addEventListener("click", async () => {
@@ -1083,18 +1188,27 @@ function showFileInformation() {
     return;
   }
 
-  openActivityPanel("File Information", "Info");
-  activityFilterBar.classList.add("hidden");
-  activityPanelBody.innerHTML = `
-    <div class="summary-card">
-      <p><span class="activity-highlight">File/folder name:</span> ${escapeHtml(state.currentFileInfo.fileName || state.currentFileName || "-")}</p>
-      <p><span class="activity-highlight">File path:</span> ${escapeHtml(state.currentFileInfo.filePath || state.currentPath || "-")}</p>
-      <p><span class="activity-highlight">Created date:</span> ${escapeHtml(formatDate(state.currentFileInfo.createdAt))}</p>
-      <p><span class="activity-highlight">Last modified date:</span> ${escapeHtml(formatDate(state.currentFileInfo.lastModifiedAt))}</p>
-      <p><span class="activity-highlight">Last opened date:</span> ${escapeHtml(formatDate(new Date()))}</p>
-      <p><span class="activity-highlight">Last edited date:</span> ${escapeHtml(formatDate(new Date()))}</p>
-    </div>
+  previewDropdownMenu.classList.add("hidden");
+
+  const filePath = state.currentFileInfo.filePath || state.currentPath || "-";
+  const fileName = state.currentFileInfo.fileName || state.currentFileName || "-";
+  const fileType = fileName.includes(".") ? fileName.split(".").pop().toUpperCase() : state.currentItemType || "ITEM";
+  const fileSize = formatBytes(new Blob([state.currentContent || ""]).size);
+  const totalLines = String(state.currentContent || "").split("\n").length;
+  const editable = state.currentItemType === "file" && allowedExtensions.some((ext) => fileName.toLowerCase().endsWith(ext));
+
+  fileInfoPopupBody.innerHTML = `
+    <div class="info-row"><span>File name</span><strong>${escapeHtml(fileName)}</strong></div>
+    <div class="info-row"><span>File type</span><strong>${escapeHtml(fileType)}</strong></div>
+    <div class="info-row"><span>File size</span><strong>${escapeHtml(fileSize)}</strong></div>
+    <div class="info-row"><span>File path</span><strong>${escapeHtml(filePath)}</strong></div>
+    <div class="info-row"><span>Last opened</span><strong>${escapeHtml(formatDate(state.lastOpenedAt || new Date()))}</strong></div>
+    <div class="info-row"><span>Last modified</span><strong>${escapeHtml(formatDate(state.currentFileInfo.lastModifiedAt))}</strong></div>
+    <div class="info-row"><span>Total lines</span><strong>${escapeHtml(totalLines)}</strong></div>
+    <div class="info-row"><span>Access mode</span><strong>${editable ? "Editable" : "Read only"}</strong></div>
+    <div class="info-row"><span>Workspace name</span><strong>${escapeHtml(state.workspaceLabel || "Workspace")}</strong></div>
   `;
+  openFileInfoPopup();
 }
 
 async function handleFileSelection(fileList, isFolderMode) {
@@ -1147,8 +1261,8 @@ async function runSearch() {
   });
 
   state.searchResults = result.results || [];
-  pushView("search");
-  renderPreview();
+  renderSearchPopupResults(state.searchResults);
+  openSearchPopup();
   setActiveNav("searchFilesButton");
 }
 
@@ -1684,14 +1798,29 @@ folderInput.addEventListener("change", async () => handleFileSelection(folderInp
 
 document.getElementById("searchFilesButton").addEventListener("click", async () => {
   setActiveNav("searchFilesButton");
-  searchInput.focus();
+  openSearchPopup();
 });
-document.getElementById("searchSubmitButton").addEventListener("click", runSearch);
+document.getElementById("searchPopupButton").addEventListener("click", () => {
+  setActiveNav("searchFilesButton");
+  openSearchPopup();
+});
+document.getElementById("closeSearchPopupButton").addEventListener("click", closeSearchPopup);
 searchInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     await runSearch();
   }
+});
+searchInput.addEventListener("input", async () => {
+  if (!searchInput.value.trim()) {
+    searchPopupResults.innerHTML = '<div class="empty-state">Search files in the current workspace.</div>';
+    state.searchResults = [];
+    return;
+  }
+  if (!state.workspaceId) {
+    return;
+  }
+  await runSearch();
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
@@ -1712,6 +1841,7 @@ document.getElementById("settingsLogoutButton").addEventListener("click", openLo
 document.getElementById("goBackButton").addEventListener("click", goBack);
 document.getElementById("closeActivityPanelButton").addEventListener("click", closeActivityPanel);
 document.getElementById("closeHistoryPopupButton").addEventListener("click", closeHistoryPopup);
+document.getElementById("closeFileInfoPopupButton").addEventListener("click", closeFileInfoPopup);
 document.querySelectorAll("[data-activity-filter]").forEach((button) => {
   button.addEventListener("click", async () => {
     document.querySelectorAll("[data-activity-filter]").forEach((node) => node.classList.remove("active"));
@@ -1738,6 +1868,10 @@ document.getElementById("explainCommitButton").addEventListener("click", explain
 document.getElementById("commitTitleInput").addEventListener("input", updateCommitCounts);
 document.getElementById("commitDetailsInput").addEventListener("input", updateCommitCounts);
 copyCodeButton.addEventListener("click", copyCurrentCode);
+document.getElementById("previewInfoButton").addEventListener("click", showFileInformation);
+document.getElementById("maximizePreviewButton").addEventListener("click", () => {
+  setPreviewMaximized(!state.previewMaximized);
+});
 document.getElementById("notificationButton").addEventListener("click", () => openModal(notificationModal));
 document.getElementById("closeNotificationModalButton").addEventListener("click", () => closeModal(notificationModal));
 document.getElementById("themeToggleButton").addEventListener("click", toggleTheme);
@@ -1876,6 +2010,12 @@ window.addEventListener("click", (event) => {
   }
   if (event.target === commitPopup) {
     closeCommitPopup();
+  }
+  if (!event.target.closest("#searchPopup") && !event.target.closest("#searchPopupButton") && !event.target.closest("#searchFilesButton")) {
+    closeSearchPopup();
+  }
+  if (!event.target.closest("#fileInfoPopup") && !event.target.closest("#previewInfoButton") && !event.target.closest("#previewInfoMenuItem")) {
+    closeFileInfoPopup();
   }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");
