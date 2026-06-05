@@ -4,6 +4,8 @@ const path = require("path");
 const crypto = require("crypto");
 const multer = require("multer");
 const Company = require("../models/Company");
+const CfmFileActivity = require("../models/CfmFileActivity");
+const CfmFileChange = require("../models/CfmFileChange");
 const { authMiddleware, requireCompanyRole } = require("../middleware/companyAuth");
 
 const router = express.Router();
@@ -11,6 +13,7 @@ const workspaceUpload = multer({ storage: multer.memoryStorage(), limits: { file
 const WORKSPACE_ROOT = path.join(__dirname, "..", "uploads", "cfm-workspaces");
 const MAX_TEXT_PREVIEW_SIZE = 1024 * 1024;
 const MAX_SEARCH_RESULTS = 75;
+const MASK_REPLACEMENT = "[REDACTED]";
 const ALLOWED_EXTENSIONS = new Set([
   ".html",
   ".css",
@@ -44,13 +47,17 @@ function normalizeRelativePath(input = "") {
 }
 
 function isAllowedFile(relativePath) {
-  const lowerPath = relativePath.toLowerCase();
-
+  const lowerPath = String(relativePath || "").toLowerCase();
   if (lowerPath.endsWith(".env.example")) {
     return true;
   }
-
   return ALLOWED_EXTENSIONS.has(path.extname(lowerPath));
+}
+
+function ensureEditableFile(relativePath) {
+  if (!isAllowedFile(relativePath)) {
+    throw new Error("Only supported code and text files can be edited.");
+  }
 }
 
 function getWorkspaceRoot(companyMongoId, workspaceId) {
@@ -58,7 +65,6 @@ function getWorkspaceRoot(companyMongoId, workspaceId) {
   if (!safeWorkspaceId) {
     throw new Error("Workspace ID is required.");
   }
-
   return path.join(WORKSPACE_ROOT, String(companyMongoId), safeWorkspaceId);
 }
 
@@ -88,7 +94,6 @@ function listDirectoryTree(baseAbsolutePath, baseRelativePath = "") {
           children: listDirectoryTree(path.join(baseAbsolutePath, entry.name), nextRelativePath),
         };
       }
-
       return {
         name: entry.name,
         itemType: "file",
@@ -108,6 +113,93 @@ function listDirectoryItems(baseAbsolutePath, baseRelativePath = "") {
     }));
 }
 
+function maskSecrets(content = "") {
+  return String(content || "")
+    .replace(/((?:api[_-]?key|token|secret|password)\s*[:=]\s*['"`]?)([^'"`\n\r]+)/gi, `$1${MASK_REPLACEMENT}`)
+    .replace(/(Authorization\s*:\s*['"`]Bearer\s+)([^'"`\n\r]+)/gi, `$1${MASK_REPLACEMENT}`);
+}
+
+function diffStats(oldContent = "", newContent = "") {
+  const oldLines = String(oldContent || "").split("\n");
+  const newLines = String(newContent || "").split("\n");
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+
+  let linesAdded = 0;
+  let linesRemoved = 0;
+
+  newLines.forEach((line) => {
+    if (!oldSet.has(line)) {
+      linesAdded += 1;
+    }
+  });
+
+  oldLines.forEach((line) => {
+    if (!newSet.has(line)) {
+      linesRemoved += 1;
+    }
+  });
+
+  return { linesAdded, linesRemoved };
+}
+
+function buildSimpleSummary({ action, filePath, oldContent = "", newContent = "", linesAdded = 0, linesRemoved = 0 }) {
+  const fileName = path.basename(filePath || "file");
+  if (action === "opened") {
+    return `${fileName} was opened in the workspace.`;
+  }
+  if (action === "added") {
+    return `${fileName} was added to the workspace.`;
+  }
+  if (action === "removed") {
+    return `${fileName} was removed from the workspace view.`;
+  }
+  if (action === "edited") {
+    return `${fileName} is being edited with unsaved changes in the workspace.`;
+  }
+  if (action === "saved") {
+    if (oldContent !== newContent) {
+      return `${fileName} was updated with ${linesAdded} lines added and ${linesRemoved} lines removed.`;
+    }
+    return `${fileName} was saved without content changes.`;
+  }
+  return `${fileName} was updated in the workspace.`;
+}
+
+function buildExplainPayload(filePath, oldContent, newContent) {
+  const { linesAdded, linesRemoved } = diffStats(oldContent, newContent);
+  const fileName = path.basename(filePath || "file");
+  const summaryLines = [];
+
+  if (oldContent !== newContent) {
+    summaryLines.push(`The file ${fileName} was updated.`);
+    summaryLines.push(`${linesAdded} lines were added and ${linesRemoved} lines were removed.`);
+  } else {
+    summaryLines.push(`The file ${fileName} was reviewed and saved without content changes.`);
+  }
+
+  if (/port\s*=|const\s+port/i.test(oldContent + newContent)) {
+    summaryLines.push("A configuration value related to the application port may have changed.");
+  }
+  if (/login|auth|password/i.test(oldContent + newContent)) {
+    summaryLines.push("The update affects login or authentication-related code.");
+  }
+  if (/color|background|border|padding|margin/i.test(oldContent + newContent)) {
+    summaryLines.push("The update includes styling or layout-related changes.");
+  }
+  if (/required|validate|email|phone/i.test(oldContent + newContent)) {
+    summaryLines.push("The update touches validation or required input handling.");
+  }
+
+  return {
+    changeTitle: `${fileName} updated`,
+    changeDetails: summaryLines.join("\n"),
+    simpleSummary: summaryLines.join(" "),
+    linesAdded,
+    linesRemoved,
+  };
+}
+
 function buildOpenPayload(companyMongoId, workspaceId, targetPath = "") {
   const { absolutePath, relativePath } = resolveWorkspacePath(companyMongoId, workspaceId, targetPath);
   const stats = fs.statSync(absolutePath);
@@ -119,6 +211,12 @@ function buildOpenPayload(companyMongoId, workspaceId, targetPath = "") {
       itemType: "folder",
       items: listDirectoryItems(absolutePath, relativePath),
       tree: listDirectoryTree(absolutePath, relativePath),
+      fileInfo: {
+        fileName: path.basename(relativePath || absolutePath),
+        filePath: relativePath,
+        createdAt: stats.birthtime,
+        lastModifiedAt: stats.mtime,
+      },
     };
   }
 
@@ -130,6 +228,12 @@ function buildOpenPayload(companyMongoId, workspaceId, targetPath = "") {
     fileName: path.basename(absolutePath),
     content: safePreview ? fs.readFileSync(absolutePath, "utf8") : "",
     previewAvailable: safePreview,
+    fileInfo: {
+      fileName: path.basename(absolutePath),
+      filePath: relativePath,
+      createdAt: stats.birthtime,
+      lastModifiedAt: stats.mtime,
+    },
   };
 }
 
@@ -161,6 +265,39 @@ async function saveRecentActivity(companyMongoId, targetPath, itemType, action) 
   await company.save();
 }
 
+async function createActivityRecord(req, payload) {
+  const filePath = String(payload.filePath || payload.targetPath || "").trim();
+  const oldContent = String(payload.oldContent || "");
+  const newContent = String(payload.newContent || "");
+  const { linesAdded, linesRemoved } = payload.linesAdded != null && payload.linesRemoved != null
+    ? { linesAdded: payload.linesAdded, linesRemoved: payload.linesRemoved }
+    : diffStats(oldContent, newContent);
+
+  const summary = payload.simpleSummary || buildSimpleSummary({
+    action: payload.action,
+    filePath,
+    oldContent,
+    newContent,
+    linesAdded,
+    linesRemoved,
+  });
+
+  return CfmFileActivity.create({
+    companyUserId: req.user.companyMongoId,
+    companyId: req.user.companyId || "",
+    workspaceId: String(payload.workspaceId || ""),
+    filePath,
+    fileName: path.basename(filePath || payload.fileName || ""),
+    action: payload.action || "opened",
+    oldContent: maskSecrets(oldContent),
+    newContent: maskSecrets(newContent),
+    linesAdded,
+    linesRemoved,
+    simpleSummary: summary,
+    changedBy: req.user.companyEmail || req.user.companyId || "Company user",
+  });
+}
+
 function walkSearch(baseAbsolutePath, baseRelativePath, query, matches) {
   if (matches.length >= MAX_SEARCH_RESULTS) {
     return;
@@ -188,6 +325,26 @@ function walkSearch(baseAbsolutePath, baseRelativePath, query, matches) {
   }
 }
 
+function summarizeFolderActivity(records, folderPath) {
+  const scoped = records.filter((item) => !folderPath || item.filePath.startsWith(folderPath));
+  const edited = scoped.filter((item) => item.action === "saved").length;
+  const added = scoped.filter((item) => item.action === "added").length;
+  const removed = scoped.filter((item) => item.action === "removed").length;
+  const renamed = scoped.filter((item) => item.action === "renamed").length;
+  const total = edited + added + removed + renamed;
+
+  return {
+    totalFilesChanged: total,
+    summary: `${total} file activities were tracked in this folder.`,
+    details: [
+      `${edited} files were edited`,
+      `${added} new files were added`,
+      `${renamed} files were renamed`,
+      `${removed} files were removed from the workspace`,
+    ],
+  };
+}
+
 router.use(authMiddleware, requireCompanyRole);
 
 router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), async (req, res) => {
@@ -210,11 +367,10 @@ router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), a
     let savedFiles = 0;
     let workspaceLabel = "Uploaded workspace";
 
-    files.forEach((file, index) => {
+    for (const [index, file] of files.entries()) {
       const relativePath = normalizeRelativePath(rawRelativePaths[index] || file.originalname);
-
       if (!isAllowedFile(relativePath)) {
-        return;
+        continue;
       }
 
       const topFolderName = relativePath.split("/")[0];
@@ -226,7 +382,16 @@ router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), a
       fs.mkdirSync(path.dirname(outputPath), { recursive: true });
       fs.writeFileSync(outputPath, file.buffer);
       savedFiles += 1;
-    });
+
+      await createActivityRecord(req, {
+        workspaceId,
+        filePath: relativePath,
+        fileName: file.originalname,
+        action: "added",
+        oldContent: "",
+        newContent: file.buffer.toString("utf8"),
+      });
+    }
 
     if (!savedFiles) {
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
@@ -266,8 +431,16 @@ router.post("/workspace/remove", async (req, res) => {
       return res.status(400).json({ message: "Only files can be removed from the workspace list." });
     }
 
+    const oldContent = isAllowedFile(relativePath) ? fs.readFileSync(absolutePath, "utf8") : "";
     fs.unlinkSync(absolutePath);
     await saveRecentActivity(req.user.companyMongoId, relativePath, "file", "remove");
+    await createActivityRecord(req, {
+      workspaceId,
+      filePath: relativePath,
+      action: "removed",
+      oldContent,
+      newContent: "",
+    });
 
     return res.json({
       message: "File removed from workspace successfully.",
@@ -281,12 +454,149 @@ router.post("/workspace/remove", async (req, res) => {
   }
 });
 
+router.put("/workspace/file", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const filePath = String(req.body.filePath || "");
+    const newContent = String(req.body.newContent || "");
+    const { absolutePath, relativePath } = resolveWorkspacePath(req.user.companyMongoId, workspaceId, filePath);
+
+    ensureEditableFile(relativePath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ message: "File not found in this workspace." });
+    }
+
+    if (fs.statSync(absolutePath).isDirectory()) {
+      return res.status(400).json({ message: "Only files can be edited in the workspace." });
+    }
+
+    const oldContent = fs.readFileSync(absolutePath, "utf8");
+    fs.writeFileSync(absolutePath, newContent, "utf8");
+    const { linesAdded, linesRemoved } = diffStats(oldContent, newContent);
+
+    await saveRecentActivity(req.user.companyMongoId, relativePath, "file", "save");
+    await createActivityRecord(req, {
+      workspaceId,
+      filePath: relativePath,
+      action: "saved",
+      oldContent,
+      newContent,
+      linesAdded,
+      linesRemoved,
+    });
+
+    return res.json({
+      message: "File saved successfully.",
+      filePath: relativePath,
+      linesAdded,
+      linesRemoved,
+      content: newContent,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to save file." });
+  }
+});
+
+router.post("/files/save-with-commit", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const filePath = String(req.body.filePath || "");
+    const newContent = String(req.body.newContent || "");
+    const changeTitle = String(req.body.changeTitle || "").trim();
+    const changeDetails = String(req.body.changeDetails || "").trim();
+    const changeReason = String(req.body.changeReason || "").trim();
+    const simpleSummary = String(req.body.simpleSummary || "").trim();
+    const { absolutePath, relativePath } = resolveWorkspacePath(req.user.companyMongoId, workspaceId, filePath);
+
+    ensureEditableFile(relativePath);
+
+    if (changeTitle.length < 5 || changeTitle.length > 100) {
+      return res.status(400).json({ message: "Change title must be between 5 and 100 characters." });
+    }
+
+    if (changeDetails.length < 10 || changeDetails.length > 1000) {
+      return res.status(400).json({ message: "Change details must be between 10 and 1000 characters." });
+    }
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ message: "File not found in this workspace." });
+    }
+
+    if (fs.statSync(absolutePath).isDirectory()) {
+      return res.status(400).json({ message: "Only files can be saved in the workspace." });
+    }
+
+    const oldContent = fs.readFileSync(absolutePath, "utf8");
+    fs.writeFileSync(absolutePath, newContent, "utf8");
+    const { linesAdded, linesRemoved } = diffStats(oldContent, newContent);
+    const fallbackSummary = buildSimpleSummary({
+      action: "saved",
+      filePath: relativePath,
+      oldContent,
+      newContent,
+      linesAdded,
+      linesRemoved,
+    });
+
+    const change = await CfmFileChange.create({
+      companyUserId: req.user.companyMongoId,
+      companyId: req.user.companyId || "",
+      workspaceId,
+      fileName: path.basename(relativePath),
+      filePath: relativePath,
+      changedBy: req.user.companyId || "Company user",
+      changedByEmail: req.user.companyEmail || "",
+      oldContent: maskSecrets(oldContent),
+      newContent: maskSecrets(newContent),
+      linesAdded,
+      linesRemoved,
+      changeTitle,
+      changeDetails,
+      changeReason,
+      simpleSummary: simpleSummary || fallbackSummary,
+      status: "submitted",
+    });
+
+    await saveRecentActivity(req.user.companyMongoId, relativePath, "file", "save");
+    await createActivityRecord(req, {
+      workspaceId,
+      filePath: relativePath,
+      action: "saved",
+      oldContent,
+      newContent,
+      linesAdded,
+      linesRemoved,
+      simpleSummary: simpleSummary || fallbackSummary,
+    });
+
+    return res.json({
+      message: "File saved and change submitted successfully",
+      filePath: relativePath,
+      content: newContent,
+      linesAdded,
+      linesRemoved,
+      change,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to save file with commit." });
+  }
+});
+
 router.get("/open", async (req, res) => {
   try {
     const workspaceId = String(req.query.workspaceId || "");
     const targetPath = String(req.query.target || "");
     const payload = buildOpenPayload(req.user.companyMongoId, workspaceId, targetPath);
     await saveRecentActivity(req.user.companyMongoId, payload.targetPath || "workspace", payload.itemType, "open");
+    await createActivityRecord(req, {
+      workspaceId,
+      filePath: payload.targetPath || "",
+      fileName: payload.fileName || path.basename(payload.targetPath || ""),
+      action: "opened",
+      oldContent: payload.content || "",
+      newContent: payload.content || "",
+    });
     return res.json(payload);
   } catch (error) {
     return res.status(400).json({ message: error.message || "Failed to open file or folder." });
@@ -313,6 +623,174 @@ router.get("/search", async (req, res) => {
     return res.json({ results });
   } catch (error) {
     return res.status(400).json({ message: error.message || "Search failed." });
+  }
+});
+
+router.get("/activity/:workspaceId", async (req, res) => {
+  try {
+    const workspaceId = String(req.params.workspaceId || "");
+    const actionFilter = String(req.query.action || "all");
+    const filePath = String(req.query.filePath || "").trim();
+    const itemType = String(req.query.itemType || "");
+
+    const filter = {
+      companyUserId: req.user.companyMongoId,
+      workspaceId,
+    };
+
+    if (filePath) {
+      filter.filePath = filePath;
+    }
+
+    if (actionFilter !== "all") {
+      filter.action = actionFilter;
+    }
+
+    const activities = await CfmFileActivity.find(filter).sort({ createdAt: -1 }).limit(100).lean();
+    const folderSummary = itemType === "folder" ? summarizeFolderActivity(activities, filePath) : null;
+
+    return res.json({ activities, folderSummary });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to load file activity." });
+  }
+});
+
+router.get("/activity/:workspaceId/file", async (req, res) => {
+  try {
+    const workspaceId = String(req.params.workspaceId || "");
+    const filePath = String(req.query.filePath || "").trim();
+
+    if (!filePath) {
+      return res.status(400).json({ message: "File path is required." });
+    }
+
+    const activities = await CfmFileActivity.find({
+      companyUserId: req.user.companyMongoId,
+      workspaceId,
+      filePath,
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    return res.json({ activities });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to load file history." });
+  }
+});
+
+router.post("/activity", async (req, res) => {
+  try {
+    const activity = await createActivityRecord(req, {
+      workspaceId: req.body.workspaceId,
+      filePath: req.body.filePath,
+      fileName: req.body.fileName,
+      action: req.body.action,
+      oldContent: req.body.oldContent,
+      newContent: req.body.newContent,
+      linesAdded: req.body.linesAdded,
+      linesRemoved: req.body.linesRemoved,
+      simpleSummary: req.body.simpleSummary,
+    });
+
+    return res.status(201).json({ message: "Activity saved successfully.", activity });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to save activity." });
+  }
+});
+
+router.get("/compare/:workspaceId/file", async (req, res) => {
+  try {
+    const workspaceId = String(req.params.workspaceId || "");
+    const filePath = String(req.query.filePath || "").trim();
+
+    if (!filePath) {
+      return res.status(400).json({ message: "File path is required." });
+    }
+
+    const latestSaved = await CfmFileActivity.findOne({
+      companyUserId: req.user.companyMongoId,
+      workspaceId,
+      filePath,
+      action: "saved",
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (!latestSaved) {
+      return res.status(404).json({ message: "No saved changes found for this file yet." });
+    }
+
+    return res.json({
+      previousContent: latestSaved.oldContent || "",
+      currentContent: latestSaved.newContent || "",
+      linesAdded: latestSaved.linesAdded || 0,
+      linesRemoved: latestSaved.linesRemoved || 0,
+      simpleSummary: latestSaved.simpleSummary || "",
+      changedAt: latestSaved.createdAt,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to compare file changes." });
+  }
+});
+
+router.post("/files/explain-changes", async (req, res) => {
+  try {
+    const filePath = String(req.body.filePath || "").trim();
+    const oldContent = String(req.body.oldContent || "");
+    const newContent = String(req.body.newContent || "");
+    return res.json(buildExplainPayload(filePath, oldContent, newContent));
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to explain file changes." });
+  }
+});
+
+router.post("/explain-changes", async (req, res) => {
+  try {
+    const filePath = String(req.body.filePath || "").trim();
+    const oldContent = String(req.body.oldContent || "");
+    const newContent = String(req.body.newContent || "");
+    return res.json(buildExplainPayload(filePath, oldContent, newContent));
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to explain file changes." });
+  }
+});
+
+router.get("/changes/:workspaceId", async (req, res) => {
+  try {
+    const workspaceId = String(req.params.workspaceId || "");
+    const filter = { companyUserId: req.user.companyMongoId };
+    if (workspaceId !== "all") {
+      filter.workspaceId = workspaceId;
+    }
+
+    const changes = await CfmFileChange.find(filter).sort({ createdAt: -1 }).limit(100).lean();
+    return res.json({ changes });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || "Failed to load submitted file changes." });
+  }
+});
+
+router.patch("/changes/:changeId/status", async (req, res) => {
+  try {
+    const status = String(req.body.status || "").trim();
+    if (!["submitted", "reviewed", "approved", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "Invalid change status." });
+    }
+
+    const change = await CfmFileChange.findOneAndUpdate(
+      { _id: req.params.changeId, companyUserId: req.user.companyMongoId },
+      { $set: { status } },
+      { new: true }
+    );
+
+    if (!change) {
+      return res.status(404).json({ message: "Submitted file change not found." });
+    }
+
+    return res.json({ message: "Change status updated successfully.", change });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to update change status." });
   }
 });
 

@@ -42,6 +42,17 @@ const state = {
   employeeFiles: [],
   editingEmployeeId: "",
   companyEditUnlocked: false,
+  currentFileInfo: null,
+  editMode: false,
+  editDraft: "",
+  originalContent: "",
+  editUndoStack: [],
+  editRedoStack: [],
+  activityFilter: "all",
+  currentHistory: [],
+  currentSummary: "",
+  filesPanelHidden: false,
+  pendingCommitPayload: null,
 };
 
 const allowedExtensions = [
@@ -105,6 +116,18 @@ const companyEditPasswordInput = document.getElementById("companyEditPasswordInp
 const companyEditPasswordSuccess = document.getElementById("companyEditPasswordSuccess");
 const companyEditPasswordError = document.getElementById("companyEditPasswordError");
 const verifyCompanyEditPasswordButton = document.getElementById("verifyCompanyEditPasswordButton");
+const editCodeButton = document.getElementById("editCodeButton");
+const editToolbar = document.getElementById("editToolbar");
+const unsavedIndicator = document.getElementById("unsavedIndicator");
+const activityPanel = document.getElementById("activityPanel");
+const activityPanelTitle = document.getElementById("activityPanelTitle");
+const activityPanelLabel = document.getElementById("activityPanelLabel");
+const activityPanelBody = document.getElementById("activityPanelBody");
+const activityFilterBar = document.getElementById("activityFilterBar");
+const historyPopup = document.getElementById("historyPopup");
+const historyPopupBody = document.getElementById("historyPopupBody");
+const commitPopup = document.getElementById("commitPopup");
+const commitPopupError = document.getElementById("commitPopupError");
 let bannerTimerId = 0;
 
 function pushNotification(message, kind = "info") {
@@ -149,6 +172,61 @@ function clearBanner() {
     window.clearTimeout(bannerTimerId);
     bannerTimerId = 0;
   }
+}
+
+function setEditMode(enabled) {
+  state.editMode = enabled;
+  editToolbar.classList.toggle("hidden", !enabled);
+  unsavedIndicator.classList.toggle("hidden", !enabled || state.editDraft === state.originalContent);
+  editCodeButton.textContent = enabled ? "Editing" : "Edit";
+}
+
+function closeActivityPanel() {
+  activityPanel.classList.add("hidden");
+  activityFilterBar.classList.add("hidden");
+}
+
+function openActivityPanel(title, label = "Activity") {
+  activityPanelTitle.textContent = title;
+  activityPanelLabel.textContent = label;
+  activityPanel.classList.remove("hidden");
+}
+
+function closeHistoryPopup() {
+  historyPopup.classList.add("hidden");
+}
+
+function openHistoryPopup() {
+  historyPopup.classList.remove("hidden");
+}
+
+function setFilesPanelHidden(hidden) {
+  state.filesPanelHidden = hidden;
+  document.querySelector(".workspace-body")?.classList.toggle("files-hidden", hidden);
+  document.getElementById("showFilesPanelButton").classList.toggle("hidden", !hidden);
+  document.getElementById("toggleFilesPanelIcon").textContent = hidden ? ">" : "<";
+}
+
+function updateCommitCounts() {
+  document.getElementById("commitTitleCount").textContent = `${document.getElementById("commitTitleInput").value.length} / 100`;
+  document.getElementById("commitDetailsCount").textContent = `${document.getElementById("commitDetailsInput").value.length} / 1000`;
+}
+
+function resetCommitPopup() {
+  document.getElementById("commitTitleInput").value = "";
+  document.getElementById("commitDetailsInput").value = "";
+  document.getElementById("commitReasonInput").value = "";
+  setInlineMessage(commitPopupError, "");
+  updateCommitCounts();
+}
+
+function openCommitPopup() {
+  commitPopup.classList.remove("hidden");
+  updateCommitCounts();
+}
+
+function closeCommitPopup() {
+  commitPopup.classList.add("hidden");
 }
 
 function renderNotifications() {
@@ -459,22 +537,123 @@ function renderSearchPreview(items) {
   `;
 }
 
+function renderEditablePreview(content) {
+  const lines = content.split("\n");
+  const lineNumbers = lines.map((_, index) => index + 1).join("\n");
+  return `
+    <div class="code-surface edit-mode">
+      <div class="code-grid">
+        <pre class="line-numbers">${lineNumbers}</pre>
+        <textarea class="code-editor" id="codeEditor" spellcheck="false" wrap="off">${escapeHtml(content)}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+function renderActivityCards(records, compact = false) {
+  if (!records.length) {
+    return '<div class="empty-state">No activity recorded yet for this selection.</div>';
+  }
+
+  return records
+    .map(
+      (item) => `
+        <article class="${compact ? "history-item" : "activity-card"}">
+          <div class="${compact ? "history-item-title" : ""}">
+            <strong>${escapeHtml(item.fileName || item.filePath || "Workspace item")}</strong>
+            <time>${formatDate(item.createdAt)}</time>
+          </div>
+          <p>${escapeHtml(item.changedBy || "Company user")} ${escapeHtml(item.action)} this item.</p>
+          <span>${item.linesAdded || 0} lines added · ${item.linesRemoved || 0} lines removed</span>
+          <p>${escapeHtml(item.simpleSummary || "")}</p>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderCompareCode(leftContent, rightContent) {
+  const leftLines = String(leftContent || "").split("\n");
+  const rightLines = String(rightContent || "").split("\n");
+  const maxLength = Math.max(leftLines.length, rightLines.length);
+  const leftOutput = [];
+  const rightOutput = [];
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftLine = leftLines[index] ?? "";
+    const rightLine = rightLines[index] ?? "";
+    const leftClass = leftLine && leftLine !== rightLine ? "diff-removed" : "";
+    const rightClass = rightLine && leftLine !== rightLine ? "diff-added" : "";
+    leftOutput.push(`<div class="${leftClass}">${escapeHtml(leftLine)}</div>`);
+    rightOutput.push(`<div class="${rightClass}">${escapeHtml(rightLine)}</div>`);
+  }
+
+  return {
+    left: leftOutput.join(""),
+    right: rightOutput.join(""),
+  };
+}
+
+function updateEditorLineNumbers(value) {
+  const lineNode = previewContent.querySelector(".line-numbers");
+  if (!lineNode) {
+    return;
+  }
+  const lines = String(value || "").split("\n");
+  lineNode.textContent = lines.map((_, index) => index + 1).join("\n");
+}
+
+function syncEditorScroll(editor) {
+  const lineNode = previewContent.querySelector(".line-numbers");
+  if (!editor || !lineNode) {
+    return;
+  }
+
+  const applyScroll = () => {
+    lineNode.scrollTop = editor.scrollTop;
+  };
+
+  editor.onscroll = applyScroll;
+  applyScroll();
+}
+
 function renderPreview() {
   breadcrumbPath.textContent = buildBreadcrumb(state.currentPath);
   copyCodeButton.disabled = !state.currentContent;
   previewDropdownMenu.classList.add("hidden");
+  unsavedIndicator.classList.toggle("hidden", !(state.editMode && state.editDraft !== state.originalContent));
 
   if (state.view === "file") {
     previewFileName.textContent = state.currentFileName || "Selected file";
     previewMeta.textContent = state.currentPath || "Preview loaded";
-    previewContent.innerHTML = renderCodePreview(state.currentContent);
-    const codeElement = previewContent.querySelector("code");
-    if (window.hljs && codeElement) {
-      window.hljs.highlightElement(codeElement);
+    previewContent.innerHTML = state.editMode ? renderEditablePreview(state.editDraft) : renderCodePreview(state.currentContent);
+    if (state.editMode) {
+      const codeEditor = document.getElementById("codeEditor");
+      if (codeEditor) {
+        codeEditor.value = state.editDraft;
+        syncEditorScroll(codeEditor);
+        codeEditor.addEventListener("input", () => {
+          state.editUndoStack.push(state.editDraft);
+          state.editRedoStack = [];
+          state.editDraft = codeEditor.value;
+          unsavedIndicator.classList.toggle("hidden", state.editDraft === state.originalContent);
+          updateEditorLineNumbers(state.editDraft);
+          const lineNode = previewContent.querySelector(".line-numbers");
+          if (lineNode) {
+            lineNode.scrollTop = codeEditor.scrollTop;
+          }
+        });
+      }
+    } else {
+      const codeElement = previewContent.querySelector("code");
+      if (window.hljs && codeElement) {
+        window.hljs.highlightElement(codeElement);
+      }
     }
     return;
   }
 
+  setEditMode(false);
   if (state.view === "search") {
     previewFileName.textContent = "Search Result";
     previewMeta.textContent = "Click a file from the list to open its preview.";
@@ -502,6 +681,10 @@ async function openWorkspaceTarget(targetPath = "") {
     return;
   }
 
+  if (state.editMode && state.editDraft !== state.originalContent && !window.confirm("You have unsaved changes. Open another item anyway?")) {
+    return;
+  }
+
   clearBanner();
   const params = new URLSearchParams({
     workspaceId: state.workspaceId,
@@ -515,6 +698,13 @@ async function openWorkspaceTarget(targetPath = "") {
   state.currentItemType = result.itemType || "";
   state.currentContent = result.content || "";
   state.currentFileName = result.fileName || (result.targetPath ? result.targetPath.split("/").pop() : "");
+  state.currentFileInfo = result.fileInfo || null;
+  state.editMode = false;
+  state.editDraft = "";
+  state.originalContent = state.currentContent || "";
+  state.editUndoStack = [];
+  state.editRedoStack = [];
+  closeActivityPanel();
 
   if (result.tree && !state.currentPath) {
     state.tree = result.tree;
@@ -550,9 +740,12 @@ async function uploadWorkspace(files, relativePaths) {
   state.currentItemType = "folder";
   state.currentContent = "";
   state.currentFileName = "";
+  state.currentFileInfo = null;
   state.searchResults = [];
   state.viewHistory = [];
   state.expandedPaths = new Set();
+  state.editMode = false;
+  closeActivityPanel();
 
   pushView("workspace");
   renderTree();
@@ -584,12 +777,324 @@ async function removeWorkspaceFile(targetPath) {
     state.currentItemType = "folder";
     state.currentContent = "";
     state.currentFileName = "";
+    state.currentFileInfo = null;
     state.view = "workspace";
+    state.editMode = false;
   }
 
   renderTree();
   renderPreview();
   showBanner("success", result.message || "File deleted successfully.");
+}
+
+function startEditMode() {
+  if (state.currentItemType !== "file" || !state.currentPath) {
+    showBanner("error", "Open a code file first.");
+    return;
+  }
+
+  state.editMode = true;
+  state.editDraft = state.currentContent || "";
+  state.originalContent = state.currentContent || "";
+  state.editUndoStack = [];
+  state.editRedoStack = [];
+  setEditMode(true);
+  renderPreview();
+  fetch(`${API_BASE_URL}/api/cfm/activity`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      filePath: state.currentPath,
+      fileName: state.currentFileName,
+      action: "edited",
+      oldContent: state.originalContent,
+      newContent: state.editDraft,
+    }),
+  }).catch(() => undefined);
+}
+
+function cancelEditMode() {
+  if (state.editDraft !== state.originalContent && !window.confirm("You have unsaved changes. Close edit mode anyway?")) {
+    return;
+  }
+
+  state.editMode = false;
+  state.editDraft = "";
+  state.originalContent = "";
+  state.editUndoStack = [];
+  state.editRedoStack = [];
+  setEditMode(false);
+  renderPreview();
+}
+
+function undoEdit() {
+  if (!state.editUndoStack.length) {
+    return;
+  }
+  state.editRedoStack.push(state.editDraft);
+  state.editDraft = state.editUndoStack.pop();
+  renderPreview();
+}
+
+function redoEdit() {
+  if (!state.editRedoStack.length) {
+    return;
+  }
+  state.editUndoStack.push(state.editDraft);
+  state.editDraft = state.editRedoStack.pop();
+  renderPreview();
+}
+
+async function openSaveCommitPopup() {
+  if (!state.editMode || !state.currentPath) {
+    showBanner("error", "Open a file in edit mode first.");
+    return;
+  }
+
+  const editor = document.getElementById("codeEditor");
+  if (editor) {
+    state.editDraft = editor.value;
+  }
+
+  state.pendingCommitPayload = {
+    workspaceId: state.workspaceId,
+    filePath: state.currentPath,
+    fileName: state.currentFileName,
+    oldContent: state.originalContent,
+    newContent: state.editDraft,
+  };
+
+  resetCommitPopup();
+  openCommitPopup();
+}
+
+async function submitSaveWithCommit() {
+  if (!state.pendingCommitPayload) {
+    showBanner("error", "No file changes are ready to save.");
+    return;
+  }
+
+  const changeTitle = document.getElementById("commitTitleInput").value.trim();
+  const changeDetails = document.getElementById("commitDetailsInput").value.trim();
+  const changeReason = document.getElementById("commitReasonInput").value.trim();
+
+  if (changeTitle.length < 5 || changeTitle.length > 100) {
+    setInlineMessage(commitPopupError, "Change title must be between 5 and 100 characters.", "error");
+    return;
+  }
+
+  if (changeDetails.length < 10 || changeDetails.length > 1000) {
+    setInlineMessage(commitPopupError, "Change details must be between 10 and 1000 characters.", "error");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/files/save-with-commit`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.pendingCommitPayload.workspaceId,
+      filePath: state.pendingCommitPayload.filePath,
+      newContent: state.pendingCommitPayload.newContent,
+      changeTitle,
+      changeDetails,
+      changeReason,
+      simpleSummary: state.currentSummary,
+    }),
+  });
+
+  state.currentContent = result.content || state.pendingCommitPayload.newContent;
+  state.originalContent = state.currentContent;
+  state.editDraft = state.currentContent;
+  state.editMode = false;
+  state.pendingCommitPayload = null;
+  state.currentSummary = result.change?.simpleSummary || state.currentSummary;
+  setEditMode(false);
+  renderPreview();
+  closeCommitPopup();
+  showBanner("success", result.message || "File saved and change submitted successfully");
+}
+
+async function explainCommitChanges() {
+  if (!state.pendingCommitPayload) {
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/files/explain-changes`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      filePath: state.pendingCommitPayload.filePath,
+      oldContent: state.pendingCommitPayload.oldContent,
+      newContent: state.pendingCommitPayload.newContent,
+    }),
+  });
+
+  document.getElementById("commitTitleInput").value = result.changeTitle || "";
+  document.getElementById("commitDetailsInput").value = result.changeDetails || "";
+  state.currentSummary = result.simpleSummary || "";
+  updateCommitCounts();
+}
+
+async function loadActivityPanel(filter = "all", mode = "file") {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  state.activityFilter = filter;
+  const normalizedFilter = filter === "edited" ? "saved" : filter;
+  const params = new URLSearchParams({
+    action: normalizedFilter,
+    itemType: mode === "folder" ? "folder" : state.currentItemType || "file",
+  });
+  if (state.currentPath) {
+    params.set("filePath", state.currentPath);
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/activity/${encodeURIComponent(state.workspaceId)}?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  state.currentHistory = result.activities || [];
+  openActivityPanel(mode === "folder" ? "Folder Activity" : "Digital File Activity", mode === "folder" ? "Activity" : "Activity");
+  activityFilterBar.classList.remove("hidden");
+
+  if (mode === "folder" && result.folderSummary) {
+    activityPanelBody.innerHTML = `
+      <div class="summary-card">
+        <strong>${escapeHtml(result.folderSummary.summary)}</strong>
+        <div class="summary-meta">${escapeHtml(state.currentPath || state.workspaceLabel || "Workspace")}</div>
+        <div class="summary-output">${escapeHtml(result.folderSummary.details.join("\n"))}</div>
+      </div>
+      ${renderActivityCards(state.currentHistory)}
+    `;
+    return;
+  }
+
+  activityPanelBody.innerHTML = renderActivityCards(state.currentHistory);
+}
+
+async function openHistoryPopupWithFilter(filter = "all") {
+  if (!state.workspaceId || !state.currentPath) {
+    showBanner("error", "Open a file first.");
+    return;
+  }
+
+  state.activityFilter = filter;
+  const normalizedFilter = filter === "edited" ? "saved" : filter;
+  const params = new URLSearchParams({
+    action: normalizedFilter,
+    filePath: state.currentPath,
+  });
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/activity/${encodeURIComponent(state.workspaceId)}/file?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  state.currentHistory = result.activities || [];
+  historyPopupBody.innerHTML = renderActivityCards(state.currentHistory, true);
+  openHistoryPopup();
+}
+
+async function openComparePanel() {
+  if (!state.workspaceId || !state.currentPath) {
+    showBanner("error", "Open a file first.");
+    return;
+  }
+
+  const params = new URLSearchParams({ filePath: state.currentPath });
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/compare/${encodeURIComponent(state.workspaceId)}/file?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  const diff = renderCompareCode(result.previousContent || "", result.currentContent || "");
+  openActivityPanel("Compare Changes", "Compare");
+  activityFilterBar.classList.add("hidden");
+  activityPanelBody.innerHTML = `
+    <div class="compare-grid">
+      <div class="compare-column">
+        <h5>Previous version</h5>
+        <div class="diff-code">${diff.left}</div>
+      </div>
+      <div class="compare-column">
+        <h5>Current version</h5>
+        <div class="diff-code">${diff.right}</div>
+      </div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-meta">${escapeHtml(formatDate(result.changedAt))}</div>
+      <p>${escapeHtml(result.simpleSummary || "")}</p>
+      <div class="activity-meta">${result.linesAdded || 0} lines added | ${result.linesRemoved || 0} lines removed</div>
+    </div>
+  `;
+}
+
+async function explainCurrentChanges() {
+  if (!state.currentPath || state.currentItemType !== "file") {
+    showBanner("error", "Open a file first.");
+    return;
+  }
+
+  const editor = document.getElementById("codeEditor");
+  const currentVersion = state.editMode && editor ? editor.value : state.currentContent;
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/explain-changes`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      filePath: state.currentPath,
+      oldContent: state.originalContent || state.currentContent,
+      newContent: currentVersion,
+    }),
+  });
+
+  state.currentSummary = result.simpleSummary || "";
+  openActivityPanel("Explain Changes", "Summary");
+  activityFilterBar.classList.add("hidden");
+  activityPanelBody.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-output">${escapeHtml(state.currentSummary)}</div>
+      <div class="activity-meta">${result.linesAdded || 0} lines added | ${result.linesRemoved || 0} lines removed</div>
+      <div class="summary-actions">
+        <button class="subtle-button" id="copySummaryButton" type="button">Copy Summary</button>
+        <button class="subtle-button" id="downloadSummaryButton" type="button">Download Summary</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("copySummaryButton").addEventListener("click", async () => {
+    await navigator.clipboard.writeText(state.currentSummary);
+    showBanner("success", "Change summary copied successfully.");
+  });
+
+  document.getElementById("downloadSummaryButton").addEventListener("click", () => {
+    const blob = new Blob([state.currentSummary], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(state.currentFileName || "change-summary").replace(/\.[^.]+$/, "")}-summary.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+}
+
+function showFileInformation() {
+  if (!state.currentFileInfo) {
+    showBanner("error", "Open a file or folder first.");
+    return;
+  }
+
+  openActivityPanel("File Information", "Info");
+  activityFilterBar.classList.add("hidden");
+  activityPanelBody.innerHTML = `
+    <div class="summary-card">
+      <p><span class="activity-highlight">File/folder name:</span> ${escapeHtml(state.currentFileInfo.fileName || state.currentFileName || "-")}</p>
+      <p><span class="activity-highlight">File path:</span> ${escapeHtml(state.currentFileInfo.filePath || state.currentPath || "-")}</p>
+      <p><span class="activity-highlight">Created date:</span> ${escapeHtml(formatDate(state.currentFileInfo.createdAt))}</p>
+      <p><span class="activity-highlight">Last modified date:</span> ${escapeHtml(formatDate(state.currentFileInfo.lastModifiedAt))}</p>
+      <p><span class="activity-highlight">Last opened date:</span> ${escapeHtml(formatDate(new Date()))}</p>
+      <p><span class="activity-highlight">Last edited date:</span> ${escapeHtml(formatDate(new Date()))}</p>
+    </div>
+  `;
 }
 
 async function handleFileSelection(fileList, isFolderMode) {
@@ -1194,11 +1699,44 @@ document.getElementById("closeCompanyInfoModalButton").addEventListener("click",
 document.getElementById("closePinSetupModalButton").addEventListener("click", () => closeModal(pinSetupModal));
 document.getElementById("closePinVerifyModalButton").addEventListener("click", () => closeModal(pinVerifyModal));
 document.getElementById("settingsButton").addEventListener("click", () => openModal(settingsModal));
+document.getElementById("digitalFileActivityButton").addEventListener("click", async () => {
+  setActiveNav("digitalFileActivityButton");
+  await loadActivityPanel("all", state.currentItemType === "folder" ? "folder" : "file");
+});
+document.getElementById("toggleFilesPanelButton").addEventListener("click", () => setFilesPanelHidden(true));
+document.getElementById("showFilesPanelButton").addEventListener("click", () => setFilesPanelHidden(false));
 document.getElementById("closeSettingsModalButton").addEventListener("click", () => closeModal(settingsModal));
 document.getElementById("employeeFilesButton").addEventListener("click", openEmployeeFilesModal);
 document.getElementById("companyDetailsUpdateButton").addEventListener("click", openCompanyEditPasswordModal);
 document.getElementById("settingsLogoutButton").addEventListener("click", openLogoutPasswordModal);
 document.getElementById("goBackButton").addEventListener("click", goBack);
+document.getElementById("closeActivityPanelButton").addEventListener("click", closeActivityPanel);
+document.getElementById("closeHistoryPopupButton").addEventListener("click", closeHistoryPopup);
+document.querySelectorAll("[data-activity-filter]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    document.querySelectorAll("[data-activity-filter]").forEach((node) => node.classList.remove("active"));
+    button.classList.add("active");
+    await loadActivityPanel(button.dataset.activityFilter || "all", state.currentItemType === "folder" ? "folder" : "file");
+  });
+});
+document.querySelectorAll("[data-history-filter]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    document.querySelectorAll("[data-history-filter]").forEach((node) => node.classList.remove("active"));
+    button.classList.add("active");
+    await openHistoryPopupWithFilter(button.dataset.historyFilter || "all");
+  });
+});
+editCodeButton.addEventListener("click", startEditMode);
+document.getElementById("undoEditButton").addEventListener("click", undoEdit);
+document.getElementById("redoEditButton").addEventListener("click", redoEdit);
+document.getElementById("cancelEditButton").addEventListener("click", cancelEditMode);
+document.getElementById("saveEditButton").addEventListener("click", openSaveCommitPopup);
+document.getElementById("closeCommitPopupButton").addEventListener("click", closeCommitPopup);
+document.getElementById("cancelCommitButton").addEventListener("click", closeCommitPopup);
+document.getElementById("submitCommitSaveButton").addEventListener("click", submitSaveWithCommit);
+document.getElementById("explainCommitButton").addEventListener("click", explainCommitChanges);
+document.getElementById("commitTitleInput").addEventListener("input", updateCommitCounts);
+document.getElementById("commitDetailsInput").addEventListener("input", updateCommitCounts);
 copyCodeButton.addEventListener("click", copyCurrentCode);
 document.getElementById("notificationButton").addEventListener("click", () => openModal(notificationModal));
 document.getElementById("closeNotificationModalButton").addEventListener("click", () => closeModal(notificationModal));
@@ -1208,26 +1746,15 @@ document.getElementById("previewMenuButton").addEventListener("click", () => {
   previewDropdownMenu.classList.toggle("hidden");
 });
 document.getElementById("previewCopyMenuItem").addEventListener("click", copyCurrentCode);
-document.getElementById("previewDownloadMenuItem").addEventListener("click", () => {
-  if (!state.currentContent || !state.currentFileName) {
-    showBanner("error", "Open a file first.");
-    return;
-  }
-  const blob = new Blob([state.currentContent], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = state.currentFileName;
-  link.click();
-  URL.revokeObjectURL(url);
-  showBanner("success", "Current file downloaded successfully.");
+document.getElementById("previewEditMenuItem").addEventListener("click", startEditMode);
+document.getElementById("previewSaveMenuItem").addEventListener("click", openSaveCommitPopup);
+document.getElementById("previewHistoryMenuItem").addEventListener("click", async () => {
+  await openHistoryPopupWithFilter("all");
 });
+document.getElementById("previewCompareMenuItem").addEventListener("click", openComparePanel);
+document.getElementById("previewExplainMenuItem").addEventListener("click", explainCurrentChanges);
 document.getElementById("previewInfoMenuItem").addEventListener("click", () => {
-  if (!state.currentFileName) {
-    showBanner("error", "Open a file first.");
-    return;
-  }
-  showBanner("success", `File info: ${state.currentFileName} | ${state.currentPath}`);
+  showFileInformation();
 });
 document.getElementById("closeEmployeeFilesModalButton").addEventListener("click", () => closeModal(employeeFilesModal));
 document.getElementById("saveEmployeeButton").addEventListener("click", saveEmployeeFile);
@@ -1343,6 +1870,12 @@ window.addEventListener("click", (event) => {
   }
   if (event.target === logoutPasswordModal) {
     closeModal(logoutPasswordModal);
+  }
+  if (event.target === historyPopup) {
+    closeHistoryPopup();
+  }
+  if (event.target === commitPopup) {
+    closeCommitPopup();
   }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");

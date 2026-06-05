@@ -8,6 +8,7 @@ const forgotPasswordButton = document.getElementById("forgotPasswordButton");
 const successBanner = document.getElementById("successBanner");
 const errorBanner = document.getElementById("errorBanner");
 const dashboardCard = document.getElementById("dashboardCard");
+const submittedChangesCard = document.getElementById("submittedChangesCard");
 const logoutButton = document.getElementById("logoutButton");
 
 function showBanner(type, message) {
@@ -33,6 +34,52 @@ function setDashboard(company) {
   document.getElementById("dashboardCompanyStatus").textContent = company.status || "-";
 }
 
+function renderSubmittedChanges(changes) {
+  const target = document.getElementById("submittedChangesList");
+  if (!target) {
+    return;
+  }
+
+  if (!changes.length) {
+    target.innerHTML = `
+      <div class="dashboard-item">
+        <span>No submitted file changes yet.</span>
+      </div>
+    `;
+    return;
+  }
+
+  target.innerHTML = changes
+    .map(
+      (item) => `
+        <div class="dashboard-item">
+          <span>${new Date(item.createdAt).toLocaleString("en-IN")}</span>
+          <strong>${item.fileName || item.filePath || "-"}</strong>
+          <p>${item.changeTitle || "-"}</p>
+          <p>${item.simpleSummary || "-"}</p>
+          <span>${item.linesAdded || 0} lines added · ${item.linesRemoved || 0} lines removed · ${item.status || "submitted"}</span>
+        </div>
+      `
+    )
+    .join("");
+}
+
+async function loadSubmittedChanges(token) {
+  const response = await fetch(`${API_BASE_URL}/api/cfm/changes/all`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || "Failed to load submitted changes.");
+  }
+
+  submittedChangesCard?.classList.remove("hidden");
+  renderSubmittedChanges(result.changes || []);
+}
+
 async function loadDashboard() {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) {
@@ -56,10 +103,14 @@ async function loadDashboard() {
 
     dashboardCard.classList.remove("hidden");
     setDashboard(result);
+    await loadSubmittedChanges(token);
   } catch (error) {
     localStorage.removeItem(TOKEN_KEY);
     if (dashboardCard) {
       dashboardCard.classList.add("hidden");
+    }
+    if (submittedChangesCard) {
+      submittedChangesCard.classList.add("hidden");
     }
     showBanner("error", error.message || "Failed to load dashboard.");
     if (window.location.pathname.endsWith("company-dashboard.html")) {
@@ -141,6 +192,9 @@ if (logoutButton) {
     localStorage.removeItem(TOKEN_KEY);
     if (dashboardCard) {
       dashboardCard.classList.add("hidden");
+    }
+    if (submittedChangesCard) {
+      submittedChangesCard.classList.add("hidden");
     }
     showBanner("success", "Logged out successfully.");
     if (window.location.pathname.endsWith("company-dashboard.html")) {

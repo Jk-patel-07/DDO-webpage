@@ -48,6 +48,12 @@
             </span>
             <span>Settings</span>
           </button>
+          <button class="nav-item" id="digitalFileActivityButton" type="button">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20v-6"/><path d="M12 8V4"/><path d="M5 12h14"/><path d="M7 7h.01"/><path d="M17 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+            </span>
+            <span>Digital File Activity</span>
+          </button>
         </nav>
 
         <div class="sidebar-foot">
@@ -117,6 +123,9 @@
               <section class="tree-panel">
                 <div class="section-head">
                   <span>Files</span>
+                  <button class="icon-button tiny-icon-button" id="toggleFilesPanelButton" type="button" aria-label="Hide files panel">
+                    <span id="toggleFilesPanelIcon">&lt;</span>
+                  </button>
                 </div>
                 <div class="tree-root" id="treeRoot">
                   <div class="empty-state">No folder opened yet</div>
@@ -130,6 +139,7 @@
                   <h4 id="previewFileName">No file selected</h4>
                 </div>
                 <div class="preview-actions">
+                  <button class="subtle-button" id="editCodeButton" type="button">Edit</button>
                   <button class="subtle-button" id="copyCodeButton" type="button">Copy</button>
                   <div class="preview-dropdown">
                     <button class="icon-button" id="previewMenuButton" type="button" aria-label="Preview options">
@@ -137,15 +147,51 @@
                     </button>
                     <div class="preview-dropdown-menu hidden" id="previewDropdownMenu">
                       <button class="preview-menu-item" id="previewCopyMenuItem" type="button">Copy code</button>
-                      <button class="preview-menu-item" id="previewDownloadMenuItem" type="button">Download current file</button>
+                      <button class="preview-menu-item" id="previewEditMenuItem" type="button">Edit File</button>
+                      <button class="preview-menu-item" id="previewSaveMenuItem" type="button">Save File</button>
+                      <button class="preview-menu-item" id="previewHistoryMenuItem" type="button">Change History</button>
+                      <button class="preview-menu-item" id="previewCompareMenuItem" type="button">Compare Changes</button>
+                      <button class="preview-menu-item" id="previewExplainMenuItem" type="button">Explain Changes</button>
                       <button class="preview-menu-item" id="previewInfoMenuItem" type="button">View file info</button>
                     </div>
                   </div>
                 </div>
               </div>
                 <div class="preview-meta" id="previewMeta">Open a coding file from the left side to see its content.</div>
+                <div class="preview-toolbar hidden" id="editToolbar">
+                  <span class="unsaved-indicator hidden" id="unsavedIndicator">Unsaved changes</span>
+                  <div class="preview-toolbar-actions">
+                    <button class="subtle-button" id="undoEditButton" type="button">Undo</button>
+                    <button class="subtle-button" id="redoEditButton" type="button">Redo</button>
+                    <button class="subtle-button" id="cancelEditButton" type="button">Cancel</button>
+                    <button class="primary-button dark-button" id="saveEditButton" type="button">Save</button>
+                  </div>
+                </div>
+                <div class="preview-layout">
                 <div class="preview-content" id="previewContent">
                   <div class="empty-state">No file selected</div>
+                </div>
+                <aside class="side-panel hidden" id="activityPanel">
+                  <div class="side-panel-head">
+                    <div>
+                      <p class="panel-label" id="activityPanelLabel">Activity</p>
+                      <h4 id="activityPanelTitle">Digital File Activity</h4>
+                    </div>
+                    <button class="icon-button" id="closeActivityPanelButton" type="button" aria-label="Close activity panel">
+                      <span>&times;</span>
+                    </button>
+                  </div>
+                  <div class="side-panel-actions hidden" id="activityFilterBar">
+                    <button class="mini-filter active" data-activity-filter="all" type="button">All activity</button>
+                    <button class="mini-filter" data-activity-filter="edited" type="button">Edited</button>
+                    <button class="mini-filter" data-activity-filter="added" type="button">Added</button>
+                    <button class="mini-filter" data-activity-filter="removed" type="button">Removed</button>
+                    <button class="mini-filter" data-activity-filter="renamed" type="button">Renamed</button>
+                  </div>
+                  <div class="side-panel-body" id="activityPanelBody">
+                    <div class="empty-state">No activity loaded yet</div>
+                  </div>
+                </aside>
                 </div>
               </section>
             </div>
@@ -153,6 +199,67 @@
         </main>
       </div>
     </div>
+
+    <button class="floating-files-toggle hidden" id="showFilesPanelButton" type="button" aria-label="Show files panel">
+      <span>&gt;</span>
+    </button>
+
+    <aside class="history-popup hidden" id="historyPopup">
+      <div class="history-popup-head">
+        <div>
+          <p class="panel-label">History</p>
+          <h4>Change History</h4>
+        </div>
+        <button class="icon-button" id="closeHistoryPopupButton" type="button" aria-label="Close history popup">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="history-popup-actions" id="historyFilterBar">
+        <button class="mini-filter active" data-history-filter="all" type="button">All activity</button>
+        <button class="mini-filter" data-history-filter="edited" type="button">Edited</button>
+        <button class="mini-filter" data-history-filter="added" type="button">Added</button>
+        <button class="mini-filter" data-history-filter="removed" type="button">Removed</button>
+        <button class="mini-filter" data-history-filter="renamed" type="button">Renamed</button>
+      </div>
+      <div class="history-popup-body" id="historyPopupBody">
+        <div class="empty-state">No activity loaded yet</div>
+      </div>
+    </aside>
+
+    <aside class="history-popup hidden" id="commitPopup">
+      <div class="history-popup-head">
+        <div>
+          <p class="panel-label">Commit</p>
+          <h4>Describe Your Changes</h4>
+        </div>
+        <button class="icon-button" id="closeCommitPopupButton" type="button" aria-label="Close commit popup">
+          <span>&times;</span>
+        </button>
+      </div>
+      <div class="history-popup-body commit-popup-body">
+        <p class="modal-copy">Please explain what you changed in this file for the manager or admin.</p>
+        <label class="field compact-field">
+          <span>Change title</span>
+          <input id="commitTitleInput" type="text" maxlength="100" />
+          <small class="meta-count" id="commitTitleCount">0 / 100</small>
+        </label>
+        <label class="field compact-field">
+          <span>Change details</span>
+          <textarea id="commitDetailsInput" rows="6" maxlength="1000"></textarea>
+          <small class="meta-count" id="commitDetailsCount">0 / 1000</small>
+        </label>
+        <label class="field compact-field">
+          <span>Optional reason for change</span>
+          <textarea id="commitReasonInput" rows="3" maxlength="300"></textarea>
+        </label>
+        <div class="inline-feedback error hidden" id="commitPopupError"></div>
+        <div class="summary-actions">
+          <button class="subtle-button" id="explainCommitButton" type="button">Explain Changes</button>
+          <button class="subtle-button" id="cancelCommitButton" type="button">Cancel</button>
+          <button class="primary-button dark-button" id="submitCommitSaveButton" type="button">Submit and Save</button>
+        </div>
+      </div>
+    </aside>
 
     <p class="power-text fixed-power-text">Power by DDO</p>
 

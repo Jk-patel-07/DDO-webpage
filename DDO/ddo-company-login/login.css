@@ -150,6 +150,18 @@ button.secondary {
   margin-bottom: 8px;
 }
 
+.dashboard-item p {
+  margin: 8px 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.dashboard-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+
 .hidden {
   display: none;
 }
