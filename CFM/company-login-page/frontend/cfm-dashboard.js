@@ -384,8 +384,8 @@ function renderNotifications() {
   notificationList.innerHTML = state.notifications
     .map((item) => `
       <div class="notification-item">
-        <span>${item.time}</span>
-        <strong>${escapeHtml(item.message)}</strong>
+        <span class="company-field-label">${item.time}</span>
+        <span class="company-field-value">${escapeHtml(item.message)}</span>
       </div>
     `)
     .join("");
@@ -755,7 +755,7 @@ function renderActivityCards(records, compact = false) {
       (item) => `
         <article class="${compact ? "history-item" : "activity-card"}">
           <div class="${compact ? "history-item-title" : ""}">
-            <strong>${escapeHtml(item.fileName || item.filePath || "Workspace item")}</strong>
+            <span class="cfm-section-title">${escapeHtml(item.fileName || item.filePath || "Workspace item")}</span>
             <time>${formatDate(item.createdAt)}</time>
           </div>
           <p>${escapeHtml(item.changedBy || "Company user")} ${escapeHtml(item.action)} this item.</p>
@@ -1219,7 +1219,7 @@ async function loadActivityPanel(filter = "all", mode = "file") {
   if (mode === "folder" && result.folderSummary) {
     activityPanelBody.innerHTML = `
       <div class="summary-card">
-        <strong>${escapeHtml(result.folderSummary.summary)}</strong>
+        <span class="cfm-section-title">${escapeHtml(result.folderSummary.summary)}</span>
         <div class="summary-meta">${escapeHtml(state.currentPath || state.workspaceLabel || "Workspace")}</div>
         <div class="summary-output">${escapeHtml(result.folderSummary.details.join("\n"))}</div>
       </div>
@@ -1323,7 +1323,7 @@ async function explainCurrentChanges() {
         <div class="summary-meta">${result.linesAdded || 0} lines added · ${result.linesRemoved || 0} lines removed · Last updated ${escapeHtml(formatDate(new Date()))}</div>
       </div>
       <div class="summary-card highlight">
-        <strong>Change summary</strong>
+        <span class="cfm-section-title">Change summary</span>
         <div class="summary-output">${escapeHtml(state.currentSummary)}</div>
         ${
           supportingLines.length
@@ -1370,15 +1370,15 @@ function showFileInformation() {
   const editable = state.currentItemType === "file" && allowedExtensions.some((ext) => fileName.toLowerCase().endsWith(ext));
 
   fileInfoPopupBody.innerHTML = `
-    <div class="info-row"><span>File name</span><strong>${escapeHtml(fileName)}</strong></div>
-    <div class="info-row"><span>File type</span><strong>${escapeHtml(fileType)}</strong></div>
-    <div class="info-row"><span>File size</span><strong>${escapeHtml(fileSize)}</strong></div>
-    <div class="info-row"><span>File path</span><strong>${escapeHtml(filePath)}</strong></div>
-    <div class="info-row"><span>Last opened</span><strong>${escapeHtml(formatDate(state.lastOpenedAt || new Date()))}</strong></div>
-    <div class="info-row"><span>Last modified</span><strong>${escapeHtml(formatDate(state.currentFileInfo.lastModifiedAt))}</strong></div>
-    <div class="info-row"><span>Total lines</span><strong>${escapeHtml(totalLines)}</strong></div>
-    <div class="info-row"><span>Access mode</span><strong>${editable ? "Editable" : "Read only"}</strong></div>
-    <div class="info-row"><span>Workspace name</span><strong>${escapeHtml(state.workspaceLabel || "Workspace")}</strong></div>
+    <div class="info-row"><span class="company-field-label">File name</span><span class="company-field-value cfm-text-wrap">${escapeHtml(fileName)}</span></div>
+    <div class="info-row"><span class="company-field-label">File type</span><span class="company-field-value cfm-text-wrap">${escapeHtml(fileType)}</span></div>
+    <div class="info-row"><span class="company-field-label">File size</span><span class="company-field-value cfm-text-wrap">${escapeHtml(fileSize)}</span></div>
+    <div class="info-row"><span class="company-field-label">File path</span><span class="company-field-value cfm-text-wrap">${escapeHtml(filePath)}</span></div>
+    <div class="info-row"><span class="company-field-label">Last opened</span><span class="company-field-value cfm-text-wrap">${escapeHtml(formatDate(state.lastOpenedAt || new Date()))}</span></div>
+    <div class="info-row"><span class="company-field-label">Last modified</span><span class="company-field-value cfm-text-wrap">${escapeHtml(formatDate(state.currentFileInfo.lastModifiedAt))}</span></div>
+    <div class="info-row"><span class="company-field-label">Total lines</span><span class="company-field-value cfm-text-wrap">${escapeHtml(totalLines)}</span></div>
+    <div class="info-row"><span class="company-field-label">Access mode</span><span class="company-field-value cfm-text-wrap">${editable ? "Editable" : "Read only"}</span></div>
+    <div class="info-row"><span class="company-field-label">Workspace name</span><span class="company-field-value cfm-text-wrap">${escapeHtml(state.workspaceLabel || "Workspace")}</span></div>
   `;
   openFileInfoPopup();
 }
@@ -1484,7 +1484,7 @@ function renderEmployeeFiles() {
   employeeList.innerHTML = state.employeeFiles
     .map((item) => `
       <div class="employee-item">
-        <strong>${escapeHtml(item.name)}</strong>
+        <span class="cfm-section-title">${escapeHtml(item.name)}</span>
         <div class="employee-item-meta">
           <span>${escapeHtml(item.role || "No role")}</span>
           <span>${escapeHtml(item.fileName || "No file name")}</span>
@@ -1783,13 +1783,13 @@ async function confirmLogoutWithPassword() {
 
 function renderCompanyDetails(company) {
   companyDetailsPanel.innerHTML = `
-    <div class="detail-row"><span>Company Name</span><strong>${escapeHtml(company.companyName)}</strong></div>
-    <div class="detail-row"><span>Company ID</span><strong>${escapeHtml(company.companyId)}</strong></div>
-    <div class="detail-row"><span>Company Email</span><strong>${escapeHtml(company.companyEmail)}</strong></div>
-    <div class="detail-row"><span>Company Phone</span><strong>${escapeHtml(company.companyPhone)}</strong></div>
-    <div class="detail-row"><span>Company Website</span><strong>${escapeHtml(company.companyWebsite)}</strong></div>
-    <div class="detail-row"><span>Company Status</span><strong>${escapeHtml(company.status)}</strong></div>
-    <div class="detail-row"><span>Created Date</span><strong>${escapeHtml(formatDate(company.createdAt))}</strong></div>
+    <div class="detail-row"><span class="company-field-label">Company Name</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.companyName)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Company ID</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.companyId)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Company Email</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.companyEmail)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Company Phone</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.companyPhone)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Company Website</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.companyWebsite)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Company Status</span><span class="company-field-value cfm-text-wrap">${escapeHtml(company.status)}</span></div>
+    <div class="detail-row"><span class="company-field-label">Created Date</span><span class="company-field-value cfm-text-wrap">${escapeHtml(formatDate(company.createdAt))}</span></div>
   `;
 }
 

@@ -9,6 +9,14 @@
   --error: #ff6f6f;
   --success: #80ffbd;
   --accent: #3b82f6;
+  --cfm-text-xs: 12px;
+  --cfm-text-sm: 14px;
+  --cfm-text-md: 16px;
+  --cfm-text-lg: 20px;
+  --cfm-text-xl: 24px;
+  --cfm-weight-regular: 400;
+  --cfm-weight-medium: 500;
+  --cfm-weight-semibold: 600;
 }
 
 * {
@@ -18,10 +26,25 @@
 body {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
+  font-size: var(--cfm-text-sm);
+  font-weight: var(--cfm-weight-regular);
+  line-height: 1.6;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.06), transparent 30%),
     var(--bg);
   color: var(--text);
+}
+
+h1 {
+  font-size: var(--cfm-text-xl);
+  font-weight: var(--cfm-weight-semibold);
+  line-height: 1.25;
+}
+
+h2,
+h3 {
+  font-size: var(--cfm-text-md);
+  font-weight: var(--cfm-weight-medium);
 }
 
 .page-shell {
@@ -55,8 +78,9 @@ body {
   border: 1px solid var(--line);
   border-radius: 999px;
   text-transform: uppercase;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: var(--cfm-weight-medium);
+  letter-spacing: 0.12em;
 }
 
 .eyebrow,
@@ -91,7 +115,8 @@ button {
   background: var(--white);
   color: var(--bg);
   text-decoration: none;
-  font-weight: 700;
+  font-size: var(--cfm-text-sm);
+  font-weight: var(--cfm-weight-medium);
   cursor: pointer;
 }
 
@@ -138,6 +163,14 @@ button {
   gap: 8px;
 }
 
+.field label,
+.field > span {
+  font-size: var(--cfm-text-xs);
+  font-weight: var(--cfm-weight-regular);
+  color: #8a8a8a;
+  letter-spacing: 0.02em;
+}
+
 input,
 textarea {
   width: 100%;
@@ -169,7 +202,8 @@ textarea:focus {
   margin-top: 18px;
   padding: 14px 16px;
   border-radius: 16px;
-  font-weight: 700;
+  font-size: var(--cfm-text-sm);
+  font-weight: var(--cfm-weight-medium);
 }
 
 .banner.show {
