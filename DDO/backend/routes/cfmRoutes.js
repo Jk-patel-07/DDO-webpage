@@ -7,6 +7,18 @@ const Company = require("../models/Company");
 const CfmFileActivity = require("../models/CfmFileActivity");
 const CfmFileChange = require("../models/CfmFileChange");
 const { authMiddleware, requireCompanyRole } = require("../middleware/companyAuth");
+const {
+  ensureFeatureSystem,
+  isInternalRelativePath,
+  buildConvertPreview,
+  applyConvertPreview,
+  undoConvert,
+  analyzeSyncPreview,
+  applySync,
+  undoLastSync,
+  buildAgenticSearchReport,
+  filterConvertPreviewBySelectedPaths,
+} = require("./cfmFeatureUtils");
 
 const router = express.Router();
 const workspaceUpload = multer({ storage: multer.memoryStorage(), limits: { files: 500, fileSize: 1024 * 1024 * 3 } });
@@ -14,6 +26,7 @@ const WORKSPACE_ROOT = path.join(__dirname, "..", "uploads", "cfm-workspaces");
 const MAX_TEXT_PREVIEW_SIZE = 1024 * 1024;
 const MAX_SEARCH_RESULTS = 75;
 const MASK_REPLACEMENT = "[REDACTED]";
+const agenticSearchJobs = new Map();
 const ALLOWED_EXTENSIONS = new Set([
   ".html",
   ".css",
@@ -83,6 +96,7 @@ function resolveWorkspacePath(companyMongoId, workspaceId, targetPath = "") {
 function listDirectoryTree(baseAbsolutePath, baseRelativePath = "") {
   return fs
     .readdirSync(baseAbsolutePath, { withFileTypes: true })
+    .filter((entry) => !isInternalRelativePath([baseRelativePath, entry.name].filter(Boolean).join("/")))
     .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
     .map((entry) => {
       const nextRelativePath = [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
@@ -105,6 +119,7 @@ function listDirectoryTree(baseAbsolutePath, baseRelativePath = "") {
 function listDirectoryItems(baseAbsolutePath, baseRelativePath = "") {
   return fs
     .readdirSync(baseAbsolutePath, { withFileTypes: true })
+    .filter((entry) => !isInternalRelativePath([baseRelativePath, entry.name].filter(Boolean).join("/")))
     .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name))
     .map((entry) => ({
       name: entry.name,
@@ -311,6 +326,9 @@ function walkSearch(baseAbsolutePath, baseRelativePath, query, matches) {
     }
 
     const relativePath = [baseRelativePath, entry.name].filter(Boolean).join("/").replace(/\\/g, "/");
+    if (isInternalRelativePath(relativePath)) {
+      continue;
+    }
     if (entry.name.toLowerCase().includes(query)) {
       matches.push({
         name: entry.name,
@@ -342,6 +360,35 @@ function summarizeFolderActivity(records, folderPath) {
       `${renamed} files were renamed`,
       `${removed} files were removed from the workspace`,
     ],
+  };
+}
+
+function createSearchJobKey(companyMongoId, workspaceId, jobId) {
+  return `${companyMongoId}:${workspaceId}:${jobId}`;
+}
+
+function getSearchJob(companyMongoId, workspaceId, jobId) {
+  return agenticSearchJobs.get(createSearchJobKey(companyMongoId, workspaceId, jobId));
+}
+
+function setSearchJob(companyMongoId, workspaceId, jobId, job) {
+  agenticSearchJobs.set(createSearchJobKey(companyMongoId, workspaceId, jobId), job);
+}
+
+function summarizeSearchJob(job) {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    featureName: job.featureName,
+    featureSlug: job.featureSlug || "",
+    currentFile: job.currentFile || "",
+    logs: job.logs,
+    summary: job.summary,
+    warnings: job.warnings,
+    groupedResults: job.groupedResults,
+    connections: job.connections,
+    preview: job.preview,
+    error: job.error || "",
   };
 }
 
@@ -397,6 +444,8 @@ router.post("/workspace/upload", workspaceUpload.array("workspaceFiles", 500), a
       fs.rmSync(workspaceRoot, { recursive: true, force: true });
       return res.status(400).json({ message: "Only coding and project files are allowed." });
     }
+
+    ensureFeatureSystem(workspaceRoot);
 
     await saveRecentActivity(req.user.companyMongoId, workspaceLabel, "folder", "upload");
 
@@ -461,6 +510,8 @@ router.post("/workspace/add", workspaceUpload.array("workspaceFiles", 500), asyn
     if (!savedFiles) {
       return res.status(400).json({ message: "Only coding and project files are allowed." });
     }
+
+    ensureFeatureSystem(workspaceRoot);
 
     return res.json({
       message: `${savedFiles} file${savedFiles === 1 ? "" : "s"} added to workspace.`,
@@ -687,6 +738,125 @@ router.get("/search", async (req, res) => {
   }
 });
 
+router.post("/search/agent/start", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureName = String(req.body.featureName || "").trim();
+    if (!workspaceId) {
+      return res.status(400).json({ message: "Workspace ID is required." });
+    }
+    if (!featureName) {
+      return res.status(400).json({ message: "Feature name is required." });
+    }
+
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const jobId = crypto.randomBytes(6).toString("hex");
+    const job = {
+      jobId,
+      workspaceId,
+      featureName,
+      featureSlug: "",
+      status: "running",
+      currentFile: "",
+      logs: [],
+      summary: {
+        filesScanned: 0,
+        relatedFilesFound: 0,
+        relatedCodeSections: 0,
+        dependenciesFound: 0,
+        possibleConflicts: 0,
+      },
+      warnings: [],
+      groupedResults: [],
+      connections: [],
+      preview: null,
+      error: "",
+      cancelSignal: { cancelled: false },
+    };
+
+    setSearchJob(req.user.companyMongoId, workspaceId, jobId, job);
+
+    setImmediate(() => {
+      try {
+        const report = buildAgenticSearchReport(workspaceRoot, featureName, {
+          cancelSignal: job.cancelSignal,
+          onProgress(entry) {
+            job.logs.push(entry);
+            if (entry.filePath) {
+              job.currentFile = entry.filePath;
+              job.summary.filesScanned += 1;
+            }
+          },
+        });
+
+        if (job.cancelSignal.cancelled) {
+          job.status = "stopped";
+          job.featureSlug = report.featureSlug;
+          job.summary = report.summary;
+          job.warnings = report.warnings;
+          job.groupedResults = report.groupedResults;
+          job.connections = report.connections;
+          job.preview = report.preview;
+          return;
+        }
+
+        job.status = "completed";
+        job.featureSlug = report.featureSlug;
+        job.summary = report.summary;
+        job.warnings = report.warnings;
+        job.groupedResults = report.groupedResults;
+        job.connections = report.connections;
+        job.preview = report.preview;
+      } catch (error) {
+        job.status = "failed";
+        job.error = error.message || "Agentic search failed.";
+      }
+    });
+
+    return res.status(202).json({
+      jobId,
+      status: job.status,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to start AI search." });
+  }
+});
+
+router.get("/search/agent/status", async (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || "");
+    const jobId = String(req.query.jobId || "");
+    const job = getSearchJob(req.user.companyMongoId, workspaceId, jobId);
+    if (!job) {
+      return res.status(404).json({ message: "Search job not found." });
+    }
+    return res.json(summarizeSearchJob(job));
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to load AI search status." });
+  }
+});
+
+router.post("/search/agent/stop", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const jobId = String(req.body.jobId || "");
+    const job = getSearchJob(req.user.companyMongoId, workspaceId, jobId);
+    if (!job) {
+      return res.status(404).json({ message: "Search job not found." });
+    }
+    job.cancelSignal.cancelled = true;
+    if (job.status === "running") {
+      job.status = "stopping";
+    }
+    return res.json({
+      message: "AI search stop requested.",
+      status: job.status,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to stop AI search." });
+  }
+});
+
 router.get("/activity/:workspaceId", async (req, res) => {
   try {
     const workspaceId = String(req.params.workspaceId || "");
@@ -882,6 +1052,99 @@ router.delete("/recent", async (req, res) => {
     return res.json({ message: "Recent files cleared successfully." });
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to clear recent files." });
+  }
+});
+
+router.post("/feature/convert/preview", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureName = String(req.body.featureName || "").trim();
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const preview = buildConvertPreview(workspaceRoot, featureName);
+    return res.json(preview);
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to analyze feature conversion." });
+  }
+});
+
+router.post("/feature/convert/apply", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureName = String(req.body.featureName || "").trim();
+    const selectedPaths = Array.isArray(req.body.selectedPaths) ? req.body.selectedPaths : [];
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const preview = filterConvertPreviewBySelectedPaths(buildConvertPreview(workspaceRoot, featureName), selectedPaths);
+    const result = applyConvertPreview(workspaceRoot, preview);
+    return res.json({
+      message: `${preview.featureName} feature folder was created successfully.`,
+      featureSlug: preview.featureSlug,
+      featureFolder: result.featureFolder,
+      tree: listDirectoryTree(workspaceRoot),
+      preview,
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to convert feature." });
+  }
+});
+
+router.post("/feature/convert/undo", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureSlug = String(req.body.featureSlug || "").trim();
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const result = undoConvert(workspaceRoot, featureSlug);
+    return res.json({
+      ...result,
+      tree: listDirectoryTree(workspaceRoot),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to undo feature conversion." });
+  }
+});
+
+router.post("/feature/sync/preview", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureSlug = String(req.body.featureSlug || "").trim();
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const preview = analyzeSyncPreview(workspaceRoot, featureSlug);
+    return res.json(preview);
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to preview sync changes." });
+  }
+});
+
+router.post("/feature/sync/apply", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureSlug = String(req.body.featureSlug || "").trim();
+    const conflictResolutions = req.body.conflictResolutions && typeof req.body.conflictResolutions === "object"
+      ? req.body.conflictResolutions
+      : {};
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const result = applySync(workspaceRoot, featureSlug, { conflictResolutions });
+    return res.json({
+      ...result,
+      tree: listDirectoryTree(workspaceRoot),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to sync feature to app." });
+  }
+});
+
+router.post("/feature/sync/undo", async (req, res) => {
+  try {
+    const workspaceId = String(req.body.workspaceId || "");
+    const featureSlug = String(req.body.featureSlug || "").trim();
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const backup = undoLastSync(workspaceRoot, featureSlug);
+    return res.json({
+      message: "Last sync was undone successfully.",
+      backupId: backup.backupId,
+      tree: listDirectoryTree(workspaceRoot),
+    });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to undo last sync." });
   }
 });
 

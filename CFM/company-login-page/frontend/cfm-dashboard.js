@@ -55,6 +55,14 @@ const state = {
   pendingCommitPayload: null,
   previewMaximized: false,
   lastOpenedAt: "",
+  featureConvertPreview: null,
+  lastConvertedFeatureSlug: "",
+  featureSyncPreview: null,
+  agentSearchJobId: "",
+  agentSearchStatus: "idle",
+  agentSearchLogs: [],
+  agentSearchReport: null,
+  selectedFeaturePaths: new Set(),
 };
 
 const allowedExtensions = [
@@ -141,7 +149,24 @@ const historyPopupBody = document.getElementById("historyPopupBody");
 const commitPopup = document.getElementById("commitPopup");
 const commitPopupError = document.getElementById("commitPopupError");
 const maximizePreviewIcon = document.getElementById("maximizePreviewIcon");
+const featureConvertPopup = document.getElementById("featureConvertPopup");
+const featureSyncPopup = document.getElementById("featureSyncPopup");
+const featureSearchInput = document.getElementById("featureSearchInput");
+const syncFeatureInput = document.getElementById("syncFeatureInput");
+const featureConvertPreviewBody = document.getElementById("featureConvertPreviewBody");
+const featureSyncPreviewBody = document.getElementById("featureSyncPreviewBody");
+const featureConvertError = document.getElementById("featureConvertError");
+const featureSyncError = document.getElementById("featureSyncError");
+const featureSearchProgressText = document.getElementById("featureSearchProgressText");
+const featureSearchCurrentFile = document.getElementById("featureSearchCurrentFile");
+const featureFilesScannedCount = document.getElementById("featureFilesScannedCount");
+const featureRelatedFilesCount = document.getElementById("featureRelatedFilesCount");
+const featureCodeSectionsCount = document.getElementById("featureCodeSectionsCount");
+const featureDependenciesCount = document.getElementById("featureDependenciesCount");
+const featureConflictsCount = document.getElementById("featureConflictsCount");
+const featureLiveLog = document.getElementById("featureLiveLog");
 let bannerTimerId = 0;
+let agentSearchPollTimer = 0;
 
 function pushNotification(message, kind = "info") {
   state.notifications.unshift({
@@ -269,7 +294,7 @@ function stopVoiceSearch() {
   if (voiceRecognition) {
     try {
       voiceRecognition.stop();
-    } catch (_error) {
+    } catch {
       // Recognition may already be stopped.
     }
     voiceRecognition = null;
@@ -309,7 +334,7 @@ async function startVoiceSearch() {
   voiceRecognition = recognition;
   try {
     recognition.start();
-  } catch (error) {
+  } catch {
     setVoiceListening(false);
     showBanner("error", "Could not start voice search. Try again.");
   }
@@ -366,6 +391,48 @@ function openFileInfoPopup() {
   fileInfoPopup.classList.remove("hidden");
 }
 
+function closeFeatureConvertPopup() {
+  featureConvertPopup.classList.add("hidden");
+  stopAgentSearchPolling();
+}
+
+function openFeatureConvertPopup() {
+  closeFeatureSyncPopup();
+  closeSearchPopup();
+  closeFileInfoPopup();
+  setInlineMessage(featureConvertError, "");
+  featureConvertPopup.classList.remove("hidden");
+  if (state.lastConvertedFeatureSlug && !featureSearchInput.value.trim()) {
+    featureSearchInput.value = state.lastConvertedFeatureSlug;
+  }
+  featureSearchInput.focus();
+  renderAgentSearchStatus();
+}
+
+function closeFeatureSyncPopup() {
+  featureSyncPopup.classList.add("hidden");
+}
+
+function deriveSelectedFeatureSlug() {
+  const parts = String(state.currentPath || "").split("/").filter(Boolean);
+  if (parts[0] === "features" && parts[1]) {
+    return parts[1];
+  }
+  return state.lastConvertedFeatureSlug || "";
+}
+
+function openFeatureSyncPopup() {
+  closeFeatureConvertPopup();
+  closeSearchPopup();
+  closeFileInfoPopup();
+  setInlineMessage(featureSyncError, "");
+  featureSyncPopup.classList.remove("hidden");
+  if (!syncFeatureInput.value.trim()) {
+    syncFeatureInput.value = deriveSelectedFeatureSlug();
+  }
+  syncFeatureInput.focus();
+}
+
 function setPreviewMaximized(enabled) {
   state.previewMaximized = enabled;
   workspaceBody.classList.toggle("preview-maximized", enabled);
@@ -389,6 +456,327 @@ function renderNotifications() {
       </div>
     `)
     .join("");
+}
+
+function renderCodeSectionSummary(section) {
+  const preview = escapeHtml(section.snippet || "").slice(0, 220);
+  return `
+    <li>
+      <strong>${escapeHtml(section.sourcePath)}</strong>
+      <div class="feature-preview-meta">Lines ${section.startLine}-${section.endLine}</div>
+      <div class="feature-preview-meta">${preview}${preview.length >= 220 ? "..." : ""}</div>
+    </li>
+  `;
+}
+
+function setAgentSearchCounters(summary = {}) {
+  featureFilesScannedCount.textContent = summary.filesScanned || 0;
+  featureRelatedFilesCount.textContent = summary.relatedFilesFound || 0;
+  featureCodeSectionsCount.textContent = summary.relatedCodeSections || 0;
+  featureDependenciesCount.textContent = summary.dependenciesFound || 0;
+  featureConflictsCount.textContent = summary.possibleConflicts || 0;
+}
+
+function renderAgentSearchLogs(logs = []) {
+  if (!logs.length) {
+    featureLiveLog.innerHTML = '<div class="empty-state">AI activity will appear here while the search runs.</div>';
+    return;
+  }
+
+  featureLiveLog.innerHTML = logs
+    .slice(-80)
+    .map((entry) => `
+      <div class="feature-log-row">
+        <strong>${entry.level === "success" ? "✓" : entry.level === "warning" ? "!" : "•"}</strong>
+        <span>${escapeHtml(entry.message)}</span>
+      </div>
+    `)
+    .join("");
+}
+
+function renderAgentSearchStatus() {
+  const report = state.agentSearchReport;
+  const statusTextMap = {
+    idle: "Ready to scan the DDO project.",
+    running: "Searching DDO project...",
+    stopping: "Stopping AI search...",
+    stopped: "Search stopped.",
+    completed: "Search completed.",
+    failed: "Search failed.",
+  };
+  featureSearchProgressText.textContent = statusTextMap[state.agentSearchStatus] || "Ready to scan the DDO project.";
+  featureSearchCurrentFile.textContent = report?.currentFile || "-";
+  setAgentSearchCounters(report?.summary || {});
+  renderAgentSearchLogs(state.agentSearchLogs);
+}
+
+function flattenAgenticResults(report) {
+  return (report?.groupedResults || []).flatMap((group) => group.items || []);
+}
+
+function ensureSelectedFeaturePaths(report) {
+  if (!report) {
+    state.selectedFeaturePaths = new Set();
+    return;
+  }
+
+  if (!state.selectedFeaturePaths.size) {
+    state.selectedFeaturePaths = new Set(flattenAgenticResults(report).map((item) => item.filePath));
+  }
+}
+
+function renderFeatureConvertPreview(preview) {
+  if (!preview) {
+    featureConvertPreviewBody.innerHTML = '<div class="empty-state">Open a workspace and search for a feature to preview related files.</div>';
+    return;
+  }
+
+  featureConvertPreviewBody.innerHTML = `
+    <div class="feature-preview-grid">
+      <div class="feature-preview-card">
+        <h5>Related files found</h5>
+        <div class="feature-preview-meta">${preview.relatedFiles.length} files matched for ${escapeHtml(preview.featureName)}</div>
+        <ul class="feature-preview-list compact">
+          ${preview.relatedFiles.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.sourcePath)}</strong>
+              <div class="feature-preview-meta">${escapeHtml(item.category)} | ${escapeHtml(item.extractionMode)} | score ${item.score}</div>
+            </li>
+          `).join("") || "<li>No related files found.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Code sections found</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.codeSections.slice(0, 12).map(renderCodeSectionSummary).join("") || "<li>No code sections found.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>New folder structure</h5>
+        <div class="feature-preview-chip-row">
+          ${preview.newFolderStructure.map((item) => `<span class="feature-preview-chip">${escapeHtml(item)}</span>`).join("")}
+        </div>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Files that will be created</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.filesToCreate.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.targetPath)}</strong>
+              <div class="feature-preview-meta">from ${escapeHtml(item.sourcePath)} (${escapeHtml(item.extractionMode)})</div>
+            </li>
+          `).join("") || "<li>No files will be created.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Imports that will be reviewed</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.importsToChange.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.filePath)}</strong>
+              <div class="feature-preview-meta">${escapeHtml(item.importPath)}</div>
+            </li>
+          `).join("") || "<li>No import path warnings were detected for the converted copy.</li>"}
+        </ul>
+      </div>
+    </div>
+  `;
+}
+
+function renderAgenticSearchResults(report, mode = "results") {
+  if (!report?.groupedResults?.length) {
+    featureConvertPreviewBody.innerHTML = '<div class="empty-state">No related feature files were found yet.</div>';
+    return;
+  }
+
+  ensureSelectedFeaturePaths(report);
+
+  if (mode === "connections") {
+    featureConvertPreviewBody.innerHTML = `
+      <div class="feature-preview-grid">
+        ${report.connections.map((connection) => `
+          <div class="feature-preview-card">
+            <h5>${escapeHtml(connection.sourcePath)}</h5>
+            <ul class="feature-preview-list">
+              ${(connection.edges || []).map((edge) => `<li>${escapeHtml(edge.label)} -> ${escapeHtml(edge.targetPath)}</li>`).join("") || "<li>No direct related-file connections detected.</li>"}
+            </ul>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    return;
+  }
+
+  if (mode === "preview-code") {
+    const selected = flattenAgenticResults(report).filter((item) => state.selectedFeaturePaths.has(item.filePath));
+    featureConvertPreviewBody.innerHTML = `
+      <div class="feature-preview-grid">
+        ${selected.map((item) => `
+          <div class="feature-preview-card">
+            <h5>${escapeHtml(item.filePath)}</h5>
+            <div class="feature-preview-meta">${escapeHtml(item.reason)}</div>
+            <ul class="feature-preview-list compact">
+              ${(item.codeSections || []).map((section) => `
+                <li>
+                  <strong>Lines ${section.startLine}-${section.endLine}</strong>
+                  <div class="feature-preview-meta">${escapeHtml(section.snippet).slice(0, 260)}${section.snippet.length > 260 ? "..." : ""}</div>
+                </li>
+              `).join("") || "<li>No related code sections found.</li>"}
+            </ul>
+          </div>
+        `).join("")}
+      </div>
+    `;
+    return;
+  }
+
+  featureConvertPreviewBody.innerHTML = `
+    <div class="feature-preview-grid">
+      ${report.groupedResults.map((group) => `
+        <div class="feature-preview-card">
+          <h5>${escapeHtml(group.label)}</h5>
+          <ul class="feature-preview-list compact">
+            ${group.items.map((item) => `
+              <li>
+                <label style="display:flex; gap:8px; align-items:flex-start;">
+                  <input type="checkbox" data-feature-select="${escapeHtml(item.filePath)}" ${state.selectedFeaturePaths.has(item.filePath) ? "checked" : ""} />
+                  <span style="display:grid; gap:4px;">
+                    <strong>${escapeHtml(item.filePath)}</strong>
+                    <span class="feature-preview-meta">Lines ${escapeHtml(item.lineRanges.join(", ") || "-")}</span>
+                    <span class="feature-preview-meta">Found: ${escapeHtml(item.sectionNames.join(", ") || "Related section")}</span>
+                    <span class="feature-preview-meta">Why: ${escapeHtml(item.reason)}</span>
+                    <span class="feature-preview-meta">Imports: ${escapeHtml((item.dependencies || []).join(", ") || "-")}</span>
+                    <span class="feature-preview-meta">Exports: ${escapeHtml((item.exports || []).join(", ") || "-")}</span>
+                    <div class="summary-actions" style="margin-top:4px;">
+                      <button class="subtle-button" type="button" data-open-agent-file="${escapeHtml(item.filePath)}">Open File</button>
+                      <button class="subtle-button" type="button" data-preview-agent-file="${escapeHtml(item.filePath)}">Preview</button>
+                    </div>
+                  </span>
+                </label>
+              </li>
+            `).join("")}
+          </ul>
+        </div>
+      `).join("")}
+      ${report.warnings?.length ? `
+        <div class="feature-preview-card conflict-card">
+          <h5>Warnings and conflicts</h5>
+          <ul class="feature-preview-list">
+            ${report.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
+          </ul>
+        </div>
+      ` : ""}
+    </div>
+  `;
+
+  featureConvertPreviewBody.querySelectorAll("[data-feature-select]").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        state.selectedFeaturePaths.add(input.dataset.featureSelect);
+      } else {
+        state.selectedFeaturePaths.delete(input.dataset.featureSelect);
+      }
+    });
+  });
+
+  featureConvertPreviewBody.querySelectorAll("[data-open-agent-file]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openWorkspaceTarget(button.dataset.openAgentFile || "");
+      closeFeatureConvertPopup();
+    });
+  });
+
+  featureConvertPreviewBody.querySelectorAll("[data-preview-agent-file]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await openWorkspaceTarget(button.dataset.previewAgentFile || "");
+    });
+  });
+}
+
+function renderFeatureSyncPreview(preview) {
+  if (!preview) {
+    featureSyncPreviewBody.innerHTML = '<div class="empty-state">Preview a converted feature folder before syncing it back into the DDO app.</div>';
+    return;
+  }
+
+  featureSyncPreviewBody.innerHTML = `
+    <div class="feature-preview-grid">
+      <div class="feature-preview-card">
+        <h5>Modified files</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.modifiedFiles.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.sourcePath)}</strong>
+              <div class="feature-preview-meta">${item.linesAdded} lines added | ${item.linesRemoved} lines removed | ${escapeHtml(item.extractionMode)}</div>
+            </li>
+          `).join("") || "<li>No modified files found.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Added files</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.addedFiles.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.featurePath)}</strong>
+              <div class="feature-preview-meta">new app path: ${escapeHtml(item.destinationPath)}</div>
+            </li>
+          `).join("") || "<li>No new feature files were detected.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Deleted files</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.deletedFiles.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.featurePath)}</strong>
+              <div class="feature-preview-meta">original app file: ${escapeHtml(item.sourcePath)}</div>
+            </li>
+          `).join("") || "<li>No deleted feature files were detected.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Changed functions</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.changedFunctions.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.sourcePath)}</strong>
+              <div class="feature-preview-meta">${escapeHtml(item.description)}</div>
+            </li>
+          `).join("") || "<li>No function-level changes were detected.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card">
+        <h5>Import changes</h5>
+        <ul class="feature-preview-list compact">
+          ${preview.importChanges.map((item) => `
+            <li>
+              <strong>${escapeHtml(item.sourcePath)}</strong>
+              <div class="feature-preview-meta">before: ${escapeHtml(item.before.join(", ") || "-")}</div>
+              <div class="feature-preview-meta">after: ${escapeHtml(item.after.join(", ") || "-")}</div>
+            </li>
+          `).join("") || "<li>No import list changes detected.</li>"}
+        </ul>
+      </div>
+      <div class="feature-preview-card ${preview.conflicts.length ? "conflict-card" : ""}">
+        <h5>Possible conflicts</h5>
+        ${
+          preview.conflicts.length
+            ? preview.conflicts.map((conflict, index) => `
+              <div class="feature-preview-card conflict-card">
+                <strong>${escapeHtml(conflict.sourcePath)}</strong>
+                <div class="feature-preview-meta">App and feature folder both changed this file.</div>
+                <select data-conflict-path="${escapeHtml(conflict.sourcePath)}" id="conflictResolution${index}">
+                  <option value="keep-app">Keep App Version</option>
+                  <option value="use-feature">Use Feature Folder Version</option>
+                  <option value="merge-both" selected>Merge Both</option>
+                </select>
+              </div>
+            `).join("")
+            : '<div class="feature-preview-meta">No conflicts were detected.</div>'
+        }
+      </div>
+    </div>
+  `;
 }
 
 function authHeaders(contentType) {
@@ -1447,6 +1835,300 @@ async function runSearch(options = {}) {
   }
 }
 
+async function previewFeatureConvert() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  const featureName = featureSearchInput.value.trim();
+  if (!featureName) {
+    setInlineMessage(featureConvertError, "Feature name is required.", "error");
+    return;
+  }
+
+  stopAgentSearchPolling();
+  state.agentSearchReport = null;
+  state.agentSearchLogs = [];
+  state.agentSearchStatus = "running";
+  state.selectedFeaturePaths = new Set();
+  renderAgentSearchStatus();
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/search/agent/start`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureName,
+    }),
+  });
+
+  state.agentSearchJobId = result.jobId || "";
+  setInlineMessage(featureConvertError, "");
+  startAgentSearchPolling();
+}
+
+async function applyFeatureConvert() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  const featureName = featureSearchInput.value.trim();
+  if (!featureName) {
+    setInlineMessage(featureConvertError, "Feature name is required.", "error");
+    return;
+  }
+
+  const selectedPaths = [...state.selectedFeaturePaths];
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/feature/convert/apply`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureName,
+      selectedPaths,
+    }),
+  });
+
+  state.tree = result.tree || state.tree;
+  state.featureConvertPreview = result.preview || state.featureConvertPreview;
+  state.lastConvertedFeatureSlug = result.featureSlug || state.lastConvertedFeatureSlug;
+  renderTree();
+  renderAgenticSearchResults(state.agentSearchReport || {
+    groupedResults: [],
+    warnings: [],
+    connections: [],
+  });
+  syncFeatureInput.value = state.lastConvertedFeatureSlug;
+  showBanner("success", result.message || "Feature folder created successfully.");
+}
+
+async function undoFeatureConvert() {
+  const featureSlug = safeFeatureSlug(featureSearchInput.value || state.lastConvertedFeatureSlug);
+  if (!state.workspaceId || !featureSlug) {
+    setInlineMessage(featureConvertError, "Choose a feature to undo.", "error");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/feature/convert/undo`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureSlug,
+    }),
+  });
+
+  state.tree = result.tree || state.tree;
+  state.featureConvertPreview = null;
+  renderTree();
+  renderFeatureConvertPreview(null);
+  showBanner("success", result.message || "Feature conversion was undone.");
+}
+
+function safeFeatureSlug(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function previewFeatureSync() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  const featureSlug = safeFeatureSlug(syncFeatureInput.value || deriveSelectedFeatureSlug());
+  if (!featureSlug) {
+    setInlineMessage(featureSyncError, "Feature folder is required.", "error");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/feature/sync/preview`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureSlug,
+    }),
+  });
+
+  state.featureSyncPreview = result;
+  setInlineMessage(featureSyncError, "");
+  renderFeatureSyncPreview(result);
+}
+
+function stopAgentSearchPolling() {
+  if (agentSearchPollTimer) {
+    window.clearInterval(agentSearchPollTimer);
+    agentSearchPollTimer = 0;
+  }
+}
+
+async function pollAgentSearchStatus() {
+  if (!state.workspaceId || !state.agentSearchJobId) {
+    stopAgentSearchPolling();
+    return;
+  }
+
+  const params = new URLSearchParams({
+    workspaceId: state.workspaceId,
+    jobId: state.agentSearchJobId,
+  });
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/search/agent/status?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+
+  state.agentSearchStatus = result.status || "idle";
+  state.agentSearchLogs = result.logs || [];
+  state.agentSearchReport = result;
+  state.lastConvertedFeatureSlug = result.featureSlug || state.lastConvertedFeatureSlug;
+  renderAgentSearchStatus();
+
+  if (result.status === "completed" || result.status === "stopped") {
+    stopAgentSearchPolling();
+    state.featureConvertPreview = result.preview || null;
+    renderAgenticSearchResults(result, "results");
+  }
+
+  if (result.status === "failed") {
+    stopAgentSearchPolling();
+    setInlineMessage(featureConvertError, result.error || "AI search failed.", "error");
+  }
+}
+
+function startAgentSearchPolling() {
+  stopAgentSearchPolling();
+  pollAgentSearchStatus().catch((error) => {
+    setInlineMessage(featureConvertError, error.message || "Failed to load AI search progress.", "error");
+  });
+  agentSearchPollTimer = window.setInterval(() => {
+    pollAgentSearchStatus().catch((error) => {
+      stopAgentSearchPolling();
+      setInlineMessage(featureConvertError, error.message || "Failed to load AI search progress.", "error");
+    });
+  }, 700);
+}
+
+async function stopFeatureSearch() {
+  if (!state.workspaceId || !state.agentSearchJobId) {
+    return;
+  }
+  await apiRequest(`${API_BASE_URL}/api/cfm/search/agent/stop`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      jobId: state.agentSearchJobId,
+    }),
+  });
+  state.agentSearchStatus = "stopping";
+  renderAgentSearchStatus();
+}
+
+async function openFirstSelectedFeatureFile() {
+  const firstPath = [...state.selectedFeaturePaths][0];
+  if (!firstPath) {
+    showBanner("error", "Select a related file first.");
+    return;
+  }
+  await openWorkspaceTarget(firstPath);
+  closeFeatureConvertPopup();
+}
+
+function showFeatureConnections() {
+  if (!state.agentSearchReport) {
+    showBanner("error", "Run the AI search first.");
+    return;
+  }
+  renderAgenticSearchResults(state.agentSearchReport, "connections");
+}
+
+function previewSelectedFeatureCode() {
+  if (!state.agentSearchReport) {
+    showBanner("error", "Run the AI search first.");
+    return;
+  }
+  renderAgenticSearchResults(state.agentSearchReport, "preview-code");
+}
+
+function collectConflictResolutions() {
+  const resolutions = {};
+  featureSyncPreviewBody.querySelectorAll("[data-conflict-path]").forEach((select) => {
+    resolutions[select.dataset.conflictPath] = select.value;
+  });
+  return resolutions;
+}
+
+async function applyFeatureSync() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  const featureSlug = safeFeatureSlug(syncFeatureInput.value || deriveSelectedFeatureSlug());
+  if (!featureSlug) {
+    setInlineMessage(featureSyncError, "Feature folder is required.", "error");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/feature/sync/apply`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureSlug,
+      conflictResolutions: collectConflictResolutions(),
+    }),
+  });
+
+  state.tree = result.tree || state.tree;
+  renderTree();
+
+  if (result.ok === false) {
+    setInlineMessage(
+      featureSyncError,
+      `Validation failed and the app was restored. ${result.validation?.issues?.map((issue) => issue.filePath).join(", ")}`,
+      "error"
+    );
+    renderFeatureSyncPreview(state.featureSyncPreview);
+    return;
+  }
+
+  state.featureSyncPreview = result.preview || state.featureSyncPreview;
+  renderFeatureSyncPreview(state.featureSyncPreview);
+  showBanner("success", result.message || `${featureSlug} folder changes were successfully synced with the DDO app.`);
+}
+
+async function undoLastSync() {
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+
+  const featureSlug = safeFeatureSlug(syncFeatureInput.value || deriveSelectedFeatureSlug());
+  if (!featureSlug) {
+    setInlineMessage(featureSyncError, "Feature folder is required.", "error");
+    return;
+  }
+
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/feature/sync/undo`, {
+    method: "POST",
+    headers: authHeaders("application/json"),
+    body: JSON.stringify({
+      workspaceId: state.workspaceId,
+      featureSlug,
+    }),
+  });
+
+  state.tree = result.tree || state.tree;
+  renderTree();
+  showBanner("success", result.message || "Last sync was undone successfully.");
+}
+
 async function loadPrivacyStatus() {
   const result = await apiRequest(`${API_BASE_URL}/api/cfm/privacy/status`, {
     headers: authHeaders(),
@@ -1579,41 +2261,6 @@ async function openEmployeeFilesModal() {
   renderEmployeeFiles();
   closeModal(settingsModal);
   openModal(employeeFilesModal);
-}
-
-async function openCompanyDetailsModal() {
-  const result = await apiRequest(`${API_BASE_URL}/api/cfm/company/edit/current`, {
-    headers: authHeaders(),
-  });
-
-  if (result.success === false) {
-    throw new Error(result.message || "Failed to load company details.");
-  }
-
-  const details = result;
-
-  document.getElementById("updateCompanyName").value = details.companyName || "";
-  document.getElementById("updateCompanyEmail").value = details.companyEmail || "";
-  document.getElementById("updateCompanyPhone").value = details.companyPhone || "";
-  document.getElementById("updateCompanyWebsite").value = details.companyWebsite || "";
-  document.getElementById("updateOfficeDetails").value = details.officeDetails || "";
-  document.getElementById("updateHeadOfficeCity").value = details.headOfficeCity || "";
-  document.getElementById("updateHeadOfficeState").value = details.headOfficeState || "";
-  document.getElementById("updateHeadOfficeCountry").value = details.headOfficeCountry || "";
-  document.getElementById("updateHeadOfficePincode").value = details.headOfficePincode || "";
-  document.getElementById("updateFilledByName").value = details.filledByName || "";
-  document.getElementById("updateFilledByEmail").value = details.filledByEmail || "";
-  document.getElementById("updateFilledByPhone").value = details.filledByPhone || "";
-  document.getElementById("updatePersonName").value = details.personName || "";
-  document.getElementById("updatePersonEmail").value = details.personEmail || "";
-  document.getElementById("updatePersonPhone").value = details.personPhone || "";
-  document.getElementById("updatePersonPosition").value = details.personPosition || "";
-  document.getElementById("updateCompanyDetails").value = details.companyDetails || "";
-  document.getElementById("updateCompanyLogo").value = "";
-  document.getElementById("updateCompanyPhoto").value = "";
-  document.getElementById("updateCompanyProof").value = "";
-
-  openModal(companyDetailsModal);
 }
 
 async function saveCompanyDetailsUpdate() {
@@ -1938,11 +2585,6 @@ async function copyCurrentCode() {
   showBanner("success", "File copied successfully.");
 }
 
-function logout() {
-  localStorage.removeItem(TOKEN_KEY);
-  window.location.href = LOGIN_PATH;
-}
-
 async function initializeDashboard() {
   if (!state.token) {
     window.location.href = LOGIN_PATH;
@@ -1997,7 +2639,24 @@ document.getElementById("searchPopupButton").addEventListener("click", () => {
   setActiveNav("searchFilesButton");
   openSearchPopup();
 });
+document.getElementById("convertFeatureButton").addEventListener("click", () => {
+  setActiveNav("searchFilesButton");
+  openFeatureConvertPopup();
+});
+document.getElementById("syncFeatureButton").addEventListener("click", () => {
+  openFeatureSyncPopup();
+});
 document.getElementById("closeSearchPopupButton").addEventListener("click", closeSearchPopup);
+document.getElementById("closeFeatureConvertPopupButton").addEventListener("click", closeFeatureConvertPopup);
+document.getElementById("closeFeatureSyncPopupButton").addEventListener("click", closeFeatureSyncPopup);
+document.getElementById("cancelFeatureConvertButton").addEventListener("click", closeFeatureConvertPopup);
+document.getElementById("cancelFeatureSyncButton").addEventListener("click", closeFeatureSyncPopup);
+document.getElementById("runFeaturePreviewButton").addEventListener("click", previewFeatureConvert);
+document.getElementById("applyFeatureConvertButton").addEventListener("click", applyFeatureConvert);
+document.getElementById("undoFeatureConvertButton").addEventListener("click", undoFeatureConvert);
+document.getElementById("previewFeatureSyncButton").addEventListener("click", previewFeatureSync);
+document.getElementById("applyFeatureSyncButton").addEventListener("click", applyFeatureSync);
+document.getElementById("undoLastSyncButton").addEventListener("click", undoLastSync);
 clearSearchButton.addEventListener("click", async () => {
   searchInput.value = "";
   state.searchResults = [];
@@ -2030,6 +2689,18 @@ searchInput.addEventListener("input", async () => {
     return;
   }
   await runSearch({ keepPopupState: true, silent: true });
+});
+featureSearchInput.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    await previewFeatureConvert();
+  }
+});
+syncFeatureInput.addEventListener("keydown", async (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    await previewFeatureSync();
+  }
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
@@ -2225,6 +2896,12 @@ window.addEventListener("click", (event) => {
   }
   if (!event.target.closest("#fileInfoPopup") && !event.target.closest("#previewInfoButton") && !event.target.closest("#previewInfoMenuItem")) {
     closeFileInfoPopup();
+  }
+  if (event.target === featureConvertPopup) {
+    closeFeatureConvertPopup();
+  }
+  if (event.target === featureSyncPopup) {
+    closeFeatureSyncPopup();
   }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");
