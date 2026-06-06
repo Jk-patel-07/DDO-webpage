@@ -1,1 +1,101 @@
 @import "tailwindcss";
+
+/* Search Components Styling */
+
+/* Search Popup Scrollbar Styling */
+.search-popup::-webkit-scrollbar {
+  width: 6px;
+}
+
+.search-popup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.search-popup::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.3);
+  border-radius: 3px;
+}
+
+.search-popup::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.5);
+}
+
+/* Search Log Scrollbar */
+.search-logs::-webkit-scrollbar {
+  width: 4px;
+}
+
+.search-logs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.search-logs::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 2px;
+}
+
+.search-logs::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.4);
+}
+
+/* Smooth animations for search progress */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+  }
+}
+
+.search-active {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Search indicator animation */
+@keyframes slide-in-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.search-indicator {
+  animation: slide-in-up 0.3s ease-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .search-popup {
+    position: fixed;
+    right: 12px;
+    bottom: 80px;
+    width: calc(100vw - 24px);
+    max-width: 100%;
+  }
+
+  .search-indicator {
+    right: 12px;
+    bottom: 12px;
+    max-width: calc(100vw - 24px);
+  }
+}
+
+/* Overlay for confirm dialog */
+.search-confirm-overlay {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+

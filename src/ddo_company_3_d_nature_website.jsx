@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Globe2, Zap, ShieldCheck, Code2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SearchTrigger } from "@/components/SearchTrigger";
 import horseLogo from "@/assets/horse_logo.png";
 import NatureBackground from "./components/NatureBackground";
 
@@ -58,6 +59,9 @@ export default function DDOCompanyWebsite() {
           <a href="/CFM/company-login.html" className="transition hover:text-emerald-300">CFM</a>
           <a href="/DDO/ddo-one-form/" className="transition hover:text-emerald-300">DDO One</a>
           <a href="#contact" className="transition hover:text-emerald-300">Contact</a>
+          <div className="ml-4 pl-4 border-l border-white/15">
+            <SearchTrigger />
+          </div>
         </nav>
       </header>
 
