@@ -63,6 +63,11 @@ const state = {
   agentSearchLogs: [],
   agentSearchReport: null,
   selectedFeaturePaths: new Set(),
+  featureSearchMode: "smart",
+  featureCategoryFilters: new Set(["all"]),
+  featureTypeFilters: new Set(),
+  includeIgnoredFolders: false,
+  recentFeatureSearches: JSON.parse(localStorage.getItem("ddoCfmRecentFeatureSearches") || "[]"),
 };
 
 const allowedExtensions = [
@@ -165,8 +170,10 @@ const featureCodeSectionsCount = document.getElementById("featureCodeSectionsCou
 const featureDependenciesCount = document.getElementById("featureDependenciesCount");
 const featureConflictsCount = document.getElementById("featureConflictsCount");
 const featureLiveLog = document.getElementById("featureLiveLog");
+const featureSuggestions = document.getElementById("featureSuggestions");
 let bannerTimerId = 0;
 let agentSearchPollTimer = 0;
+let featureSuggestionTimer = 0;
 
 function pushNotification(message, kind = "info") {
   state.notifications.unshift({
@@ -340,6 +347,48 @@ async function startVoiceSearch() {
   }
 }
 
+async function startFeatureVoiceSearch() {
+  const recognition = getSpeechRecognition();
+  if (!recognition) {
+    showBanner("error", "Voice search is not supported in this browser.");
+    return;
+  }
+
+  stopVoiceSearch();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = "en-IN";
+  recognition.onstart = () => {
+    featureSearchProgressText.textContent = "Listening for feature name...";
+  };
+  recognition.onend = () => {
+    if (state.agentSearchStatus === "idle") {
+      featureSearchProgressText.textContent = "Ready to scan the DDO project.";
+    }
+  };
+  recognition.onerror = () => {
+    if (state.agentSearchStatus === "idle") {
+      featureSearchProgressText.textContent = "Ready to scan the DDO project.";
+    }
+  };
+  recognition.onresult = async (event) => {
+    const transcript = event.results[0]?.[0]?.transcript?.trim();
+    if (!transcript) {
+      return;
+    }
+    featureSearchInput.value = transcript;
+    await previewFeatureConvert();
+  };
+
+  voiceRecognition = recognition;
+  try {
+    recognition.start();
+  } catch {
+    featureSearchProgressText.textContent = "Ready to scan the DDO project.";
+    showBanner("error", "Could not start voice search. Try again.");
+  }
+}
+
 function searchItemTypeLabel(item) {
   if (item.itemType === "folder") {
     return "Folder";
@@ -405,8 +454,10 @@ function openFeatureConvertPopup() {
   if (state.lastConvertedFeatureSlug && !featureSearchInput.value.trim()) {
     featureSearchInput.value = state.lastConvertedFeatureSlug;
   }
+  document.getElementById("featureSearchModeSelect").value = state.featureSearchMode;
   featureSearchInput.focus();
   renderAgentSearchStatus();
+  renderFeatureSuggestions([]);
 }
 
 function closeFeatureSyncPopup() {
@@ -483,19 +534,24 @@ function renderAgentSearchLogs(logs = []) {
     return;
   }
 
+  const baseTime = new Date(logs[0].createdAt || Date.now()).getTime();
   featureLiveLog.innerHTML = logs
     .slice(-80)
-    .map((entry) => `
+    .map((entry) => {
+      const elapsed = Math.max(0, (new Date(entry.createdAt || Date.now()).getTime() - baseTime) / 1000);
+      return `
       <div class="feature-log-row">
         <strong>${entry.level === "success" ? "✓" : entry.level === "warning" ? "!" : "•"}</strong>
-        <span>${escapeHtml(entry.message)}</span>
+        <span>${escapeHtml(`${elapsed.toFixed(1)}s — ${entry.message}`)}</span>
       </div>
-    `)
+    `;
+    })
     .join("");
 }
 
 function renderAgentSearchStatus() {
   const report = state.agentSearchReport;
+  const scannedFileCount = new Set((state.agentSearchLogs || []).map((entry) => entry.filePath).filter(Boolean)).size;
   const statusTextMap = {
     idle: "Ready to scan the DDO project.",
     running: "Searching DDO project...",
@@ -506,8 +562,69 @@ function renderAgentSearchStatus() {
   };
   featureSearchProgressText.textContent = statusTextMap[state.agentSearchStatus] || "Ready to scan the DDO project.";
   featureSearchCurrentFile.textContent = report?.currentFile || "-";
-  setAgentSearchCounters(report?.summary || {});
+  setAgentSearchCounters({
+    ...(report?.summary || {}),
+    filesScanned: report?.summary?.filesScanned || scannedFileCount,
+  });
+  if (report?.elapsedMs != null && state.agentSearchStatus !== "idle") {
+    featureSearchProgressText.textContent = `${featureSearchProgressText.textContent} ${Math.max(0, report.elapsedMs / 1000).toFixed(1)}s`;
+  }
   renderAgentSearchLogs(state.agentSearchLogs);
+}
+
+function saveRecentFeatureSearch(query) {
+  const next = [query, ...state.recentFeatureSearches.filter((item) => item !== query)].slice(0, 8);
+  state.recentFeatureSearches = next;
+  localStorage.setItem("ddoCfmRecentFeatureSearches", JSON.stringify(next));
+}
+
+function renderFeatureSuggestions(items = []) {
+  if (!items.length) {
+    featureSuggestions.classList.add("hidden");
+    featureSuggestions.innerHTML = "";
+    return;
+  }
+
+  featureSuggestions.classList.remove("hidden");
+  featureSuggestions.innerHTML = items
+    .map((item) => `<button class="feature-suggestion-chip" type="button" data-feature-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>`)
+    .join("");
+
+  featureSuggestions.querySelectorAll("[data-feature-suggestion]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      featureSearchInput.value = button.dataset.featureSuggestion || "";
+      renderFeatureSuggestions([]);
+      await previewFeatureConvert();
+    });
+  });
+}
+
+async function loadFeatureSuggestions() {
+  if (!state.workspaceId) {
+    return;
+  }
+  const query = featureSearchInput.value.trim();
+  if (!query) {
+    renderFeatureSuggestions(state.recentFeatureSearches);
+    return;
+  }
+  const params = new URLSearchParams({
+    workspaceId: state.workspaceId,
+    q: query,
+    includeIgnored: String(state.includeIgnoredFolders),
+  });
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/search/agent/suggestions?${params.toString()}`, {
+    headers: authHeaders(),
+  });
+  renderFeatureSuggestions(result.suggestions || []);
+}
+
+function currentFeatureCategoryFilters() {
+  return [...state.featureCategoryFilters];
+}
+
+function currentFeatureTypeFilters() {
+  return [...state.featureTypeFilters];
 }
 
 function flattenAgenticResults(report) {
@@ -632,6 +749,16 @@ function renderAgenticSearchResults(report, mode = "results") {
 
   featureConvertPreviewBody.innerHTML = `
     <div class="feature-preview-grid">
+      <div class="feature-preview-card">
+        <h5>${escapeHtml(report.featureName || "Feature")} Feature Results</h5>
+        <div class="feature-preview-meta">Files indexed: ${report.summary?.filesIndexed || 0}</div>
+        <div class="feature-preview-meta">Files searched: ${report.summary?.filesSearched || 0}</div>
+        <div class="feature-preview-meta">Files scanned: ${report.summary?.filesScanned || 0}</div>
+        <div class="feature-preview-meta">Related files found: ${report.summary?.relatedFilesFound || 0}</div>
+        <div class="feature-preview-meta">Related code sections: ${report.summary?.relatedCodeSections || 0}</div>
+        <div class="feature-preview-meta">Dependencies found: ${report.summary?.dependenciesFound || 0}</div>
+        <div class="feature-preview-meta">Possible conflicts: ${report.summary?.possibleConflicts || 0}</div>
+      </div>
       ${report.groupedResults.map((group) => `
         <div class="feature-preview-card">
           <h5>${escapeHtml(group.label)}</h5>
@@ -645,6 +772,7 @@ function renderAgenticSearchResults(report, mode = "results") {
                     <span class="feature-preview-meta">Lines ${escapeHtml(item.lineRanges.join(", ") || "-")}</span>
                     <span class="feature-preview-meta">Found: ${escapeHtml(item.sectionNames.join(", ") || "Related section")}</span>
                     <span class="feature-preview-meta">Why: ${escapeHtml(item.reason)}</span>
+                    <span class="feature-preview-meta">Relevance: ${escapeHtml(item.relevance || "Possible Match")}</span>
                     <span class="feature-preview-meta">Imports: ${escapeHtml((item.dependencies || []).join(", ") || "-")}</span>
                     <span class="feature-preview-meta">Exports: ${escapeHtml((item.exports || []).join(", ") || "-")}</span>
                     <div class="summary-actions" style="margin-top:4px;">
@@ -663,6 +791,14 @@ function renderAgenticSearchResults(report, mode = "results") {
           <h5>Warnings and conflicts</h5>
           <ul class="feature-preview-list">
             ${report.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
+          </ul>
+        </div>
+      ` : ""}
+      ${report.gitHistory?.length ? `
+        <div class="feature-preview-card">
+          <h5>Git History</h5>
+          <ul class="feature-preview-list compact">
+            ${report.gitHistory.map((entry) => `<li>${escapeHtml(entry.commit)}</li>`).join("")}
           </ul>
         </div>
       ` : ""}
@@ -1860,10 +1996,15 @@ async function previewFeatureConvert() {
     body: JSON.stringify({
       workspaceId: state.workspaceId,
       featureName,
+      mode: state.featureSearchMode,
+      categoryFilters: currentFeatureCategoryFilters(),
+      typeFilters: currentFeatureTypeFilters(),
+      includeIgnored: state.includeIgnoredFolders,
     }),
   });
 
   state.agentSearchJobId = result.jobId || "";
+  saveRecentFeatureSearch(featureName);
   setInlineMessage(featureConvertError, "");
   startAgentSearchPolling();
 }
@@ -1966,6 +2107,46 @@ function stopAgentSearchPolling() {
     window.clearInterval(agentSearchPollTimer);
     agentSearchPollTimer = 0;
   }
+}
+
+function toggleFeatureCategoryFilter(button) {
+  const value = button.dataset.featureCategory;
+  if (!value) {
+    return;
+  }
+  if (value === "all") {
+    state.featureCategoryFilters = new Set(["all"]);
+    document.querySelectorAll("[data-feature-category]").forEach((node) => node.classList.toggle("active", node === button));
+    return;
+  }
+  state.featureCategoryFilters.delete("all");
+  if (state.featureCategoryFilters.has(value)) {
+    state.featureCategoryFilters.delete(value);
+  } else {
+    state.featureCategoryFilters.add(value);
+  }
+  if (!state.featureCategoryFilters.size) {
+    state.featureCategoryFilters.add("all");
+  }
+  document.querySelectorAll("[data-feature-category]").forEach((node) => {
+    const active = node.dataset.featureCategory === "all"
+      ? state.featureCategoryFilters.has("all")
+      : state.featureCategoryFilters.has(node.dataset.featureCategory);
+    node.classList.toggle("active", active);
+  });
+}
+
+function toggleFeatureTypeFilter(button) {
+  const value = button.dataset.featureType;
+  if (!value) {
+    return;
+  }
+  if (state.featureTypeFilters.has(value)) {
+    state.featureTypeFilters.delete(value);
+  } else {
+    state.featureTypeFilters.add(value);
+  }
+  button.classList.toggle("active", state.featureTypeFilters.has(value));
 }
 
 async function pollAgentSearchStatus() {
@@ -2652,8 +2833,13 @@ document.getElementById("closeFeatureSyncPopupButton").addEventListener("click",
 document.getElementById("cancelFeatureConvertButton").addEventListener("click", closeFeatureConvertPopup);
 document.getElementById("cancelFeatureSyncButton").addEventListener("click", closeFeatureSyncPopup);
 document.getElementById("runFeaturePreviewButton").addEventListener("click", previewFeatureConvert);
+document.getElementById("featureVoiceSearchButton").addEventListener("click", startFeatureVoiceSearch);
+document.getElementById("stopFeatureSearchButton").addEventListener("click", stopFeatureSearch);
 document.getElementById("applyFeatureConvertButton").addEventListener("click", applyFeatureConvert);
 document.getElementById("undoFeatureConvertButton").addEventListener("click", undoFeatureConvert);
+document.getElementById("showFeatureConnectionsButton").addEventListener("click", showFeatureConnections);
+document.getElementById("previewSelectedFeatureCodeButton").addEventListener("click", previewSelectedFeatureCode);
+document.getElementById("openSelectedFeatureFileButton").addEventListener("click", openFirstSelectedFeatureFile);
 document.getElementById("previewFeatureSyncButton").addEventListener("click", previewFeatureSync);
 document.getElementById("applyFeatureSyncButton").addEventListener("click", applyFeatureSync);
 document.getElementById("undoLastSyncButton").addEventListener("click", undoLastSync);
@@ -2695,12 +2881,48 @@ featureSearchInput.addEventListener("keydown", async (event) => {
     event.preventDefault();
     await previewFeatureConvert();
   }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    if (state.agentSearchStatus === "running" || state.agentSearchStatus === "stopping") {
+      await stopFeatureSearch();
+    } else {
+      closeFeatureConvertPopup();
+    }
+  }
+});
+featureSearchInput.addEventListener("input", () => {
+  if (featureSuggestionTimer) {
+    window.clearTimeout(featureSuggestionTimer);
+  }
+  featureSuggestionTimer = window.setTimeout(() => {
+    loadFeatureSuggestions().catch(() => undefined);
+  }, 180);
 });
 syncFeatureInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     await previewFeatureSync();
   }
+});
+document.getElementById("featureSearchModeSelect").addEventListener("change", (event) => {
+  state.featureSearchMode = event.target.value;
+});
+document.getElementById("featureRecentSearchesButton").addEventListener("click", () => {
+  renderFeatureSuggestions(state.recentFeatureSearches);
+});
+document.getElementById("featureIncludeIgnoredButton").addEventListener("click", (event) => {
+  state.includeIgnoredFolders = !state.includeIgnoredFolders;
+  event.currentTarget.classList.toggle("active", state.includeIgnoredFolders);
+});
+document.getElementById("clearFeatureSearchButton").addEventListener("click", () => {
+  featureSearchInput.value = "";
+  renderFeatureSuggestions(state.recentFeatureSearches);
+});
+document.querySelectorAll("[data-feature-category]").forEach((button) => {
+  button.addEventListener("click", () => toggleFeatureCategoryFilter(button));
+});
+document.querySelectorAll("[data-feature-type]").forEach((button) => {
+  button.addEventListener("click", () => toggleFeatureTypeFilter(button));
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
@@ -2909,5 +3131,27 @@ window.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", syncSidebarState);
+window.addEventListener("keydown", async (event) => {
+  if (event.ctrlKey && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    openFeatureConvertPopup();
+    return;
+  }
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "f") {
+    event.preventDefault();
+    state.featureSearchMode = "deep";
+    document.getElementById("featureSearchModeSelect").value = "deep";
+    openFeatureConvertPopup();
+    return;
+  }
+  if (event.key === "Escape" && !featureConvertPopup.classList.contains("hidden")) {
+    event.preventDefault();
+    if (state.agentSearchStatus === "running" || state.agentSearchStatus === "stopping") {
+      await stopFeatureSearch();
+    } else {
+      closeFeatureConvertPopup();
+    }
+  }
+});
 
 initializeDashboard();

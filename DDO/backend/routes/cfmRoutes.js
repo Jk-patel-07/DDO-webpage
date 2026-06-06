@@ -10,6 +10,9 @@ const { authMiddleware, requireCompanyRole } = require("../middleware/companyAut
 const {
   ensureFeatureSystem,
   isInternalRelativePath,
+  listWorkspaceFiles,
+  getFeatureTerms,
+  getWorkspaceIndex,
   buildConvertPreview,
   applyConvertPreview,
   undoConvert,
@@ -18,6 +21,7 @@ const {
   undoLastSync,
   buildAgenticSearchReport,
   filterConvertPreviewBySelectedPaths,
+  buildSearchSuggestions,
 } = require("./cfmFeatureUtils");
 
 const router = express.Router();
@@ -388,6 +392,10 @@ function summarizeSearchJob(job) {
     groupedResults: job.groupedResults,
     connections: job.connections,
     preview: job.preview,
+    gitHistory: job.gitHistory || [],
+    elapsedMs: Date.now() - (job.startedAt || Date.now()),
+    mode: job.mode || "smart",
+    filters: job.filters || {},
     error: job.error || "",
   };
 }
@@ -742,11 +750,22 @@ router.post("/search/agent/start", async (req, res) => {
   try {
     const workspaceId = String(req.body.workspaceId || "");
     const featureName = String(req.body.featureName || "").trim();
+    const mode = String(req.body.mode || "smart").trim().toLowerCase();
+    const categoryFilters = Array.isArray(req.body.categoryFilters) ? req.body.categoryFilters : [];
+    const typeFilters = Array.isArray(req.body.typeFilters) ? req.body.typeFilters : [];
+    const includeIgnored = Boolean(req.body.includeIgnored);
     if (!workspaceId) {
       return res.status(400).json({ message: "Workspace ID is required." });
     }
     if (!featureName) {
       return res.status(400).json({ message: "Feature name is required." });
+    }
+
+    for (const [key, activeJob] of agenticSearchJobs.entries()) {
+      if (key.startsWith(`${req.user.companyMongoId}:${workspaceId}:`) && activeJob.status === "running") {
+        activeJob.cancelSignal.cancelled = true;
+        activeJob.status = "stopping";
+      }
     }
 
     const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
@@ -755,12 +774,16 @@ router.post("/search/agent/start", async (req, res) => {
       jobId,
       workspaceId,
       featureName,
+      mode,
       featureSlug: "",
       status: "running",
+      startedAt: Date.now(),
       currentFile: "",
       logs: [],
       summary: {
+        filesIndexed: 0,
         filesScanned: 0,
+        filesSearched: 0,
         relatedFilesFound: 0,
         relatedCodeSections: 0,
         dependenciesFound: 0,
@@ -770,26 +793,46 @@ router.post("/search/agent/start", async (req, res) => {
       groupedResults: [],
       connections: [],
       preview: null,
+      gitHistory: [],
+      filters: {
+        categoryFilters,
+        typeFilters,
+        includeIgnored,
+      },
       error: "",
       cancelSignal: { cancelled: false },
     };
 
     setSearchJob(req.user.companyMongoId, workspaceId, jobId, job);
 
-    setImmediate(() => {
-      try {
-        const report = buildAgenticSearchReport(workspaceRoot, featureName, {
-          cancelSignal: job.cancelSignal,
-          onProgress(entry) {
-            job.logs.push(entry);
-            if (entry.filePath) {
-              job.currentFile = entry.filePath;
-              job.summary.filesScanned += 1;
-            }
-          },
-        });
+    const index = getWorkspaceIndex(workspaceRoot, {
+      includeIgnored,
+      changedOnly: mode === "changed",
+    });
+    const files = index.indexedFiles.filter((file) => !file.relativePath.startsWith("features/"));
+    const terms = getFeatureTerms(featureName);
+    const fileLogsSeen = new Set();
+    let currentIndex = 0;
+    job.summary.filesIndexed = index.filesIndexed;
 
+    job.logs.push({
+      id: `${Date.now()}-0`,
+      message: "Searching DDO project...",
+      level: "info",
+      filePath: "",
+      createdAt: new Date().toISOString(),
+    });
+
+    const processBatch = () => {
+      try {
         if (job.cancelSignal.cancelled) {
+          const report = buildAgenticSearchReport(workspaceRoot, featureName, {
+            mode,
+            categoryFilters,
+            typeFilters,
+            includeIgnored,
+            changedOnly: mode === "changed",
+          });
           job.status = "stopped";
           job.featureSlug = report.featureSlug;
           job.summary = report.summary;
@@ -797,9 +840,81 @@ router.post("/search/agent/start", async (req, res) => {
           job.groupedResults = report.groupedResults;
           job.connections = report.connections;
           job.preview = report.preview;
+          job.gitHistory = report.gitHistory;
           return;
         }
 
+        const batch = files.slice(currentIndex, currentIndex + 4);
+        batch.forEach((file) => {
+          job.currentFile = file.relativePath;
+          if (!fileLogsSeen.has(file.relativePath)) {
+            fileLogsSeen.add(file.relativePath);
+            job.summary.filesScanned = fileLogsSeen.size;
+            job.logs.push({
+              id: `${Date.now()}-${job.logs.length + 1}`,
+              message: `Opened ${file.relativePath}`,
+              level: "info",
+              filePath: file.relativePath,
+              createdAt: new Date().toISOString(),
+            });
+          }
+
+          const lowerPath = file.relativePath.toLowerCase();
+          if (terms.some((term) => lowerPath.includes(term))) {
+            job.logs.push({
+              id: `${Date.now()}-${job.logs.length + 1}`,
+              message: `Found related file match in ${file.relativePath}`,
+              level: "success",
+              filePath: file.relativePath,
+              createdAt: new Date().toISOString(),
+            });
+          }
+
+          if (/\.(js|jsx|ts|tsx|css|html|json|md|txt|py|php|rs)$/i.test(file.relativePath)) {
+            const content = String(file.content || "").toLowerCase();
+            if (terms.some((term) => content.includes(term))) {
+              job.logs.push({
+                id: `${Date.now()}-${job.logs.length + 1}`,
+                message: `Found related code logic in ${file.relativePath}`,
+                level: "success",
+                filePath: file.relativePath,
+                createdAt: new Date().toISOString(),
+              });
+            }
+            if (/charging|ischarging|navigator\.getbattery|systembattery|powerstatus|batterypercentage|batterylevel/.test(content)) {
+              job.logs.push({
+                id: `${Date.now()}-${job.logs.length + 1}`,
+                message: `Found battery or power logic in ${file.relativePath}`,
+                level: "success",
+                filePath: file.relativePath,
+                createdAt: new Date().toISOString(),
+              });
+            }
+            if (/import |require\(|export /.test(content)) {
+              job.logs.push({
+                id: `${Date.now()}-${job.logs.length + 1}`,
+                message: "Checking imports and dependencies",
+                level: "info",
+                filePath: file.relativePath,
+                createdAt: new Date().toISOString(),
+              });
+            }
+          }
+        });
+
+        currentIndex += batch.length;
+        if (currentIndex < files.length) {
+          setTimeout(processBatch, 40);
+          return;
+        }
+
+        const report = buildAgenticSearchReport(workspaceRoot, featureName, {
+          mode,
+          categoryFilters,
+          typeFilters,
+          includeIgnored,
+          changedOnly: mode === "changed",
+        });
         job.status = "completed";
         job.featureSlug = report.featureSlug;
         job.summary = report.summary;
@@ -807,11 +922,15 @@ router.post("/search/agent/start", async (req, res) => {
         job.groupedResults = report.groupedResults;
         job.connections = report.connections;
         job.preview = report.preview;
+        job.gitHistory = report.gitHistory;
+        job.logs = [...job.logs, ...report.logs.filter((entry) => entry.level === "success").slice(-12)];
       } catch (error) {
         job.status = "failed";
         job.error = error.message || "Agentic search failed.";
       }
-    });
+    };
+
+    setTimeout(processBatch, 20);
 
     return res.status(202).json({
       jobId,
@@ -833,6 +952,22 @@ router.get("/search/agent/status", async (req, res) => {
     return res.json(summarizeSearchJob(job));
   } catch (error) {
     return res.status(400).json({ message: error.message || "Failed to load AI search status." });
+  }
+});
+
+router.get("/search/agent/suggestions", async (req, res) => {
+  try {
+    const workspaceId = String(req.query.workspaceId || "");
+    const query = String(req.query.q || "").trim();
+    const includeIgnored = String(req.query.includeIgnored || "") === "true";
+    if (!workspaceId) {
+      return res.status(400).json({ message: "Workspace ID is required." });
+    }
+    const { workspaceRoot } = resolveWorkspacePath(req.user.companyMongoId, workspaceId);
+    const suggestions = buildSearchSuggestions(workspaceRoot, query, { includeIgnored });
+    return res.json({ suggestions });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || "Failed to load search suggestions." });
   }
 });
 

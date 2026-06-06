@@ -1800,6 +1800,82 @@ body[data-theme="light"] .cfm-search-action:hover {
   padding: 12px;
 }
 
+.feature-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 12px 0 16px;
+  background: #080808;
+  border: 1px solid #2a2a2a;
+  border-radius: 999px;
+}
+
+.feature-input-row input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  min-height: 42px;
+}
+
+.feature-input-row input:focus {
+  outline: none;
+}
+
+.feature-toolbar-row,
+.feature-filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.feature-mode-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feature-mode-field span,
+.feature-shortcut-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.feature-mode-field select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+  color: var(--text);
+  padding: 0 10px;
+}
+
+.feature-suggestions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.feature-suggestions.hidden {
+  display: none;
+}
+
+.feature-suggestion-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.feature-filter-groups {
+  display: grid;
+  gap: 8px;
+}
+
 .feature-status-row {
   display: flex;
   justify-content: space-between;

@@ -7,9 +7,12 @@ const INTERNAL_DIR_NAME = ".cfm-system";
 const FEATURE_ROOT_NAME = "features";
 const FEATURE_META_DIR = "feature-manifests";
 const FEATURE_BACKUP_DIR = "feature-backups";
+const DEFAULT_IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build", ".cache", ".next", "coverage"]);
+const DEFAULT_IGNORED_FILES = [/\.min\./i, /\.map$/i, /package-lock\.json$/i];
+const workspaceIndexCache = new Map();
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico"]);
 const STYLE_EXTENSIONS = new Set([".css", ".scss", ".sass", ".less"]);
-const CODE_EXTENSIONS = new Set([".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".json", ".md", ".txt", ".py", ".java", ".cpp", ".c", ".php"]);
+const CODE_EXTENSIONS = new Set([".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".json", ".md", ".txt", ".py", ".java", ".cpp", ".c", ".php", ".rs"]);
 const COMMENT_STYLES = {
   ".html": { open: "<!-- ", close: " -->" },
   ".md": { open: "<!-- ", close: " -->" },
@@ -193,6 +196,7 @@ function getFeatureTerms(featureName = "") {
 function categoryLabel(category = "") {
   if (category === "frontend") return "Frontend";
   if (category === "styles") return "Styles";
+  if (category === "desktop") return "Desktop / Tauri";
   if (category === "backend") return "Backend";
   if (category === "assets") return "Assets";
   if (category === "config") return "Config";
@@ -220,6 +224,10 @@ function codeSectionLabel(snippet = "", fallbackName = "Related section") {
 
 function listWorkspaceFiles(workspaceRoot) {
   const files = [];
+  const options = arguments[1] || {};
+  const includeIgnored = Boolean(options.includeIgnored);
+  const changedOnly = Boolean(options.changedOnly);
+  const changedPaths = changedOnly ? getChangedPathsFromGit(workspaceRoot) : null;
 
   function walk(currentDir) {
     const entries = fs.readdirSync(currentDir, { withFileTypes: true });
@@ -232,22 +240,201 @@ function listWorkspaceFiles(workspaceRoot) {
       }
 
       if (entry.isDirectory()) {
+        if (!includeIgnored && DEFAULT_IGNORED_DIRS.has(entry.name.toLowerCase())) {
+          continue;
+        }
         walk(absolutePath);
         continue;
       }
+
+       if (!includeIgnored && DEFAULT_IGNORED_FILES.some((pattern) => pattern.test(relativePath))) {
+        continue;
+      }
+
+      if (changedPaths && changedPaths.size && !changedPaths.has(relativePath)) {
+        continue;
+      }
+
+      const stats = fs.statSync(absolutePath);
 
       files.push({
         absolutePath,
         relativePath,
         name: entry.name,
         extension: path.extname(entry.name).toLowerCase(),
-        size: fs.statSync(absolutePath).size,
+        size: stats.size,
+        mtimeMs: stats.mtimeMs,
       });
     }
   }
 
   walk(workspaceRoot);
   return files;
+}
+
+function getChangedPathsFromGit(workspaceRoot) {
+  try {
+    const output = childProcess.execFileSync("git", ["status", "--short"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return new Set(
+      output
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => normalizeRelativePath(line.replace(/^[A-Z? ]+/, "").trim()))
+        .filter(Boolean)
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function fileTypeLabelFromExtension(extension = "") {
+  const map = {
+    ".js": "JS",
+    ".jsx": "JSX",
+    ".ts": "TS",
+    ".tsx": "TSX",
+    ".css": "CSS",
+    ".html": "HTML",
+    ".json": "JSON",
+    ".rs": "Rust",
+    ".py": "Python",
+  };
+  return map[extension] || extension.replace(".", "").toUpperCase();
+}
+
+function extractSymbols(content = "") {
+  const text = String(content || "");
+  const symbols = new Set();
+  const patterns = [
+    /\bfunction\s+([A-Za-z0-9_]+)/g,
+    /\bclass\s+([A-Za-z0-9_]+)/g,
+    /\b(?:const|let|var)\s+([A-Za-z0-9_]+)/g,
+    /\bexport\s+(?:default\s+)?(?:function|class|const|let|var)?\s*([A-Za-z0-9_]+)/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match = pattern.exec(text);
+    while (match) {
+      if (match[1]) {
+        symbols.add(match[1]);
+      }
+      match = pattern.exec(text);
+    }
+  }
+
+  return [...symbols];
+}
+
+function getWorkspaceIndex(workspaceRoot, options = {}) {
+  const includeIgnored = Boolean(options.includeIgnored);
+  const changedOnly = Boolean(options.changedOnly);
+  const cacheKey = `${workspaceRoot}::${includeIgnored ? "all" : "clean"}::${changedOnly ? "changed" : "full"}`;
+  const files = listWorkspaceFiles(workspaceRoot, { includeIgnored, changedOnly });
+  const fingerprint = files.map((file) => `${file.relativePath}:${file.mtimeMs}:${file.size}`).join("|");
+  const cached = workspaceIndexCache.get(cacheKey);
+  if (cached && cached.fingerprint === fingerprint) {
+    return cached.index;
+  }
+
+  const indexedFiles = files.map((file) => {
+    const isText = CODE_EXTENSIONS.has(file.extension) || !file.extension;
+    const content = isText ? fs.readFileSync(file.absolutePath, "utf8") : "";
+    const imports = isText ? parseImports(content) : [];
+    const exports = isText ? parseExports(content) : [];
+    const symbols = isText ? extractSymbols(content) : [];
+    return {
+      ...file,
+      content,
+      contentLower: content.toLowerCase(),
+      imports,
+      exports,
+      symbols,
+      category: categorizeRelativePath(file.relativePath, file.extension),
+      fileType: fileTypeLabelFromExtension(file.extension),
+    };
+  });
+
+  const index = {
+    workspaceRoot,
+    createdAt: Date.now(),
+    indexedFiles,
+    symbolSet: [...new Set(indexedFiles.flatMap((file) => file.symbols))].sort(),
+    filesIndexed: indexedFiles.length,
+  };
+
+  workspaceIndexCache.set(cacheKey, { fingerprint, index });
+  return index;
+}
+
+function matchesMode(indexedFile, query, terms, mode) {
+  const fileName = indexedFile.name.toLowerCase();
+  const relativePath = indexedFile.relativePath.toLowerCase();
+  const content = indexedFile.contentLower;
+  const exact = content.includes(query) || fileName.includes(query) || relativePath.includes(query);
+  if (mode === "exact") {
+    return exact;
+  }
+  if (mode === "quick") {
+    return exact || indexedFile.symbols.some((symbol) => symbol.toLowerCase().includes(query));
+  }
+  return exact || terms.some((term) => content.includes(term) || fileName.includes(term) || relativePath.includes(term));
+}
+
+function resultRelevanceLabel(item, query) {
+  const lowerPath = item.filePath.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  if (path.basename(lowerPath).toLowerCase().includes(lowerQuery)) return "Exact Match";
+  if (item.reason.toLowerCase().includes("imports")) return "Connected Dependency";
+  if (item.reason.toLowerCase().includes("matched")) return "Highly Related";
+  return "Possible Match";
+}
+
+function searchGitHistory(workspaceRoot, query) {
+  try {
+    const output = childProcess.execFileSync("git", ["log", "--oneline", "--decorate=short", "-S", query, "--all", "-n", "10"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => ({ commit: line }));
+  } catch {
+    return [];
+  }
+}
+
+function buildSearchSuggestions(workspaceRoot, partialQuery, options = {}) {
+  const query = String(partialQuery || "").trim().toLowerCase();
+  if (!query) {
+    return [];
+  }
+  const index = getWorkspaceIndex(workspaceRoot, options);
+  const suggestions = new Set();
+  getFeatureTerms(query).forEach((term) => {
+    if (term.toLowerCase().startsWith(query)) {
+      suggestions.add(term);
+    }
+  });
+  index.symbolSet.forEach((symbol) => {
+    if (symbol.toLowerCase().startsWith(query)) {
+      suggestions.add(symbol);
+    }
+  });
+  index.indexedFiles.forEach((file) => {
+    const base = path.basename(file.relativePath).replace(/\.[^.]+$/, "");
+    if (base.toLowerCase().startsWith(query)) {
+      suggestions.add(base);
+    }
+  });
+  return [...suggestions].slice(0, 10);
 }
 
 function categorizeRelativePath(relativePath = "", extension = "") {
@@ -264,8 +451,14 @@ function categorizeRelativePath(relativePath = "", extension = "") {
   if (/package(-lock)?\.json$/.test(normalized) || /vite\.config|eslint|tsconfig|babel|webpack|rollup|\.env/.test(normalized)) {
     return "config";
   }
+  if (/src-tauri\/|\.rs$|tauri/.test(normalized)) {
+    return "desktop";
+  }
   if (/backend|server|routes|controllers|models|middleware|api/.test(normalized)) {
     return "backend";
+  }
+  if (/services?\//.test(normalized)) {
+    return "services";
   }
   if (/src\/|components\/|pages\/|hooks\/|frontend\/|public\//.test(normalized)) {
     return "frontend";
@@ -273,7 +466,7 @@ function categorizeRelativePath(relativePath = "", extension = "") {
   if (/assets\//.test(normalized)) {
     return "assets";
   }
-  return "frontend";
+  return "services";
 }
 
 function escapeRegExp(value = "") {
@@ -649,6 +842,11 @@ function filterConvertPreviewBySelectedPaths(preview, selectedPaths = []) {
 function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
   const logs = [];
   const warnings = [];
+  const mode = String(options.mode || "smart").toLowerCase();
+  const includeIgnored = Boolean(options.includeIgnored);
+  const changedOnly = mode === "changed" || Boolean(options.changedOnly);
+  const categoryFilters = new Set((options.categoryFilters || []).map((item) => String(item || "").toLowerCase()).filter(Boolean));
+  const typeFilters = new Set((options.typeFilters || []).map((item) => String(item || "").toUpperCase()).filter(Boolean));
   const emit = (message, meta = {}) => {
     const entry = {
       id: `${Date.now()}-${logs.length + 1}`,
@@ -664,12 +862,27 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
   };
 
   emit("Searching DDO project...");
-  const preview = buildConvertPreview(workspaceRoot, featureName);
-  const files = listWorkspaceFiles(workspaceRoot).filter((file) => !file.relativePath.startsWith(`${FEATURE_ROOT_NAME}/`));
+  const workspaceIndex = getWorkspaceIndex(workspaceRoot, { includeIgnored, changedOnly });
   const terms = getFeatureTerms(featureName);
+  const files = workspaceIndex.indexedFiles.filter((file) => !file.relativePath.startsWith(`${FEATURE_ROOT_NAME}/`));
+  const filteredFiles = files.filter((file) => {
+    if (categoryFilters.size) {
+      const categoryKey = file.category === "desktop" ? "tauri" : file.category;
+      if (!categoryFilters.has("all") && !categoryFilters.has(categoryKey)) {
+        return false;
+      }
+    }
+    if (typeFilters.size && !typeFilters.has(file.fileType)) {
+      return false;
+    }
+    return matchesMode(file, String(featureName || "").trim().toLowerCase(), terms, mode);
+  });
+  const matchedSourcePaths = new Set(filteredFiles.map((file) => file.relativePath));
+  const preview = filterConvertPreviewBySelectedPaths(buildConvertPreview(workspaceRoot, featureName), [...matchedSourcePaths]);
   const relatedByPath = new Map(preview.relatedFiles.map((item) => [item.sourcePath, item]));
+  const searchFiles = mode === "quick" || mode === "exact" ? filteredFiles : files;
 
-  files.forEach((file, index) => {
+  searchFiles.forEach((file, index) => {
     if (options.cancelSignal?.cancelled) {
       emit("Search stopped by user.", { level: "warning" });
       return;
@@ -717,13 +930,13 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
 
   emit(`Building ${featureName} feature map`, { level: "success" });
 
-  const groupedResults = ["frontend", "styles", "services", "backend", "assets", "config"].map((group) => ({
+  const groupedResults = ["frontend", "styles", "services", "desktop", "backend", "assets", "config"].map((group) => ({
     key: group,
     label: categoryLabel(group),
     items: preview.relatedFiles
       .filter((item) => {
         if (group === "services") {
-          return !["frontend", "styles", "backend", "assets", "config", "feature"].includes(item.category);
+          return !["frontend", "styles", "desktop", "backend", "assets", "config", "feature"].includes(item.category);
         }
         return item.category === group;
       })
@@ -741,19 +954,36 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
           codeSections: sectionMatches,
           category: item.category,
           selected: true,
+          relevance: "",
         };
       }),
   })).filter((group) => group.items.length);
 
+  groupedResults.forEach((group) => {
+    group.items.forEach((item) => {
+      item.relevance = resultRelevanceLabel(item, featureName);
+    });
+    group.items.sort((left, right) => {
+      const rank = { "Exact Match": 0, "Highly Related": 1, "Connected Dependency": 2, "Possible Match": 3 };
+      return (rank[left.relevance] ?? 9) - (rank[right.relevance] ?? 9);
+    });
+  });
+
   const connections = buildFeatureConnections(preview);
   const dependenciesFound = [...new Set(preview.plannedFiles.flatMap((item) => item.imports || []))];
   const possibleConflicts = preview.importsToChange.length;
+  const gitHistory = mode === "deep" || categoryFilters.has("git-history")
+    ? searchGitHistory(workspaceRoot, String(featureName || "").trim())
+    : [];
 
   if (!groupedResults.length) {
     warnings.push(`No strong ${featureName} matches were found in the current workspace.`);
   }
   if (possibleConflicts) {
     warnings.push(`${possibleConflicts} copied files may need import path review after conversion.`);
+  }
+  if (gitHistory.length) {
+    warnings.push(`${gitHistory.length} Git history matches were found for "${featureName}".`);
   }
 
   return {
@@ -764,8 +994,17 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
     connections,
     logs,
     warnings,
+    gitHistory,
+    mode,
+    filters: {
+      categoryFilters: [...categoryFilters],
+      typeFilters: [...typeFilters],
+      includeIgnored,
+    },
     summary: {
-      filesScanned: files.length,
+      filesIndexed: workspaceIndex.filesIndexed,
+      filesScanned: searchFiles.length,
+      filesSearched: filteredFiles.length,
       relatedFilesFound: preview.relatedFiles.length,
       relatedCodeSections: preview.codeSections.length,
       dependenciesFound: dependenciesFound.length,
@@ -1427,6 +1666,10 @@ module.exports = {
   FEATURE_ROOT_NAME,
   ensureFeatureSystem,
   isInternalRelativePath,
+  listWorkspaceFiles,
+  getFeatureTerms,
+  getWorkspaceIndex,
+  buildSearchSuggestions,
   buildConvertPreview,
   applyConvertPreview,
   undoConvert,
