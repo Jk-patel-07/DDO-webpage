@@ -437,6 +437,31 @@ function buildSearchSuggestions(workspaceRoot, partialQuery, options = {}) {
   return [...suggestions].slice(0, 10);
 }
 
+function normalizeSearchTargets(targetPaths = []) {
+  return (targetPaths || [])
+    .map((target) => ({
+      path: normalizeRelativePath(target.path || ""),
+      scopeType: target.scopeType === "file" ? "file" : "folder",
+    }))
+    .filter((target) => target.path || target.scopeType === "folder");
+}
+
+function fileMatchesSearchTargets(relativePath = "", targets = []) {
+  if (!targets.length) {
+    return true;
+  }
+  const normalizedPath = normalizeRelativePath(relativePath);
+  return targets.some((target) => {
+    if (!target.path) {
+      return true;
+    }
+    if (target.scopeType === "file") {
+      return normalizedPath === target.path;
+    }
+    return normalizedPath === target.path || normalizedPath.startsWith(`${target.path}/`);
+  });
+}
+
 function categorizeRelativePath(relativePath = "", extension = "") {
   const normalized = normalizeRelativePath(relativePath).toLowerCase();
   if (normalized.startsWith("features/")) {
@@ -773,7 +798,6 @@ function buildConvertPreview(workspaceRoot, featureName) {
 }
 
 function buildFeatureConnections(preview) {
-  const targetBySource = new Map(preview.filesToCreate.map((item) => [item.sourcePath, item]));
   const sourceLookup = new Map(preview.relatedFiles.map((item) => [item.sourcePath, item]));
   const connections = [];
 
@@ -847,6 +871,7 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
   const changedOnly = mode === "changed" || Boolean(options.changedOnly);
   const categoryFilters = new Set((options.categoryFilters || []).map((item) => String(item || "").toLowerCase()).filter(Boolean));
   const typeFilters = new Set((options.typeFilters || []).map((item) => String(item || "").toUpperCase()).filter(Boolean));
+  const targetPaths = normalizeSearchTargets(options.targetPaths || []);
   const emit = (message, meta = {}) => {
     const entry = {
       id: `${Date.now()}-${logs.length + 1}`,
@@ -864,7 +889,7 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
   emit("Searching DDO project...");
   const workspaceIndex = getWorkspaceIndex(workspaceRoot, { includeIgnored, changedOnly });
   const terms = getFeatureTerms(featureName);
-  const files = workspaceIndex.indexedFiles.filter((file) => !file.relativePath.startsWith(`${FEATURE_ROOT_NAME}/`));
+  const files = workspaceIndex.indexedFiles.filter((file) => !file.relativePath.startsWith(`${FEATURE_ROOT_NAME}/`) && fileMatchesSearchTargets(file.relativePath, targetPaths));
   const filteredFiles = files.filter((file) => {
     if (categoryFilters.size) {
       const categoryKey = file.category === "desktop" ? "tauri" : file.category;
@@ -1000,6 +1025,7 @@ function buildAgenticSearchReport(workspaceRoot, featureName, options = {}) {
       categoryFilters: [...categoryFilters],
       typeFilters: [...typeFilters],
       includeIgnored,
+      targetPaths,
     },
     summary: {
       filesIndexed: workspaceIndex.filesIndexed,

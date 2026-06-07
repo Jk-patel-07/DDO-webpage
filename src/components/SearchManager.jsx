@@ -1,9 +1,9 @@
 import { useSearch } from '@/hooks/useSearch';
-import { SearchPopup } from './SearchPopup';
+import { ChatStyleSearchPopup } from './ChatStyleSearchPopup';
 import { SearchIndicator } from './SearchIndicator';
 
 export function SearchManager() {
-  const { searches, activeSearchId } = useSearch();
+  const { searches } = useSearch();
 
   const visibleSearches = Object.values(searches).filter(s => s.isVisible);
 
@@ -11,7 +11,7 @@ export function SearchManager() {
     <>
       {/* Visible Search Popups */}
       {visibleSearches.map(search => (
-        <SearchPopup key={search.id} searchId={search.id} />
+        <ChatStyleSearchPopup key={search.id} searchId={search.id} />
       ))}
 
       {/* Floating Search Indicator */}

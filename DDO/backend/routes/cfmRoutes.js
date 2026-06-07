@@ -10,7 +10,6 @@ const { authMiddleware, requireCompanyRole } = require("../middleware/companyAut
 const {
   ensureFeatureSystem,
   isInternalRelativePath,
-  listWorkspaceFiles,
   getFeatureTerms,
   getWorkspaceIndex,
   buildConvertPreview,
@@ -754,6 +753,7 @@ router.post("/search/agent/start", async (req, res) => {
     const categoryFilters = Array.isArray(req.body.categoryFilters) ? req.body.categoryFilters : [];
     const typeFilters = Array.isArray(req.body.typeFilters) ? req.body.typeFilters : [];
     const includeIgnored = Boolean(req.body.includeIgnored);
+    const targetPaths = Array.isArray(req.body.targetPaths) ? req.body.targetPaths : [];
     if (!workspaceId) {
       return res.status(400).json({ message: "Workspace ID is required." });
     }
@@ -798,6 +798,7 @@ router.post("/search/agent/start", async (req, res) => {
         categoryFilters,
         typeFilters,
         includeIgnored,
+        targetPaths,
       },
       error: "",
       cancelSignal: { cancelled: false },
@@ -809,7 +810,25 @@ router.post("/search/agent/start", async (req, res) => {
       includeIgnored,
       changedOnly: mode === "changed",
     });
-    const files = index.indexedFiles.filter((file) => !file.relativePath.startsWith("features/"));
+    const files = index.indexedFiles.filter((file) => {
+      if (file.relativePath.startsWith("features/")) {
+        return false;
+      }
+      if (!targetPaths.length) {
+        return true;
+      }
+      return targetPaths.some((target) => {
+        const targetPath = String(target.path || "").replace(/\\/g, "/").replace(/^\/+/, "");
+        const scopeType = target.scopeType === "file" ? "file" : "folder";
+        if (!targetPath) {
+          return true;
+        }
+        if (scopeType === "file") {
+          return file.relativePath === targetPath;
+        }
+        return file.relativePath === targetPath || file.relativePath.startsWith(`${targetPath}/`);
+      });
+    });
     const terms = getFeatureTerms(featureName);
     const fileLogsSeen = new Set();
     let currentIndex = 0;
@@ -832,6 +851,7 @@ router.post("/search/agent/start", async (req, res) => {
             typeFilters,
             includeIgnored,
             changedOnly: mode === "changed",
+            targetPaths,
           });
           job.status = "stopped";
           job.featureSlug = report.featureSlug;
@@ -914,6 +934,7 @@ router.post("/search/agent/start", async (req, res) => {
           typeFilters,
           includeIgnored,
           changedOnly: mode === "changed",
+          targetPaths,
         });
         job.status = "completed";
         job.featureSlug = report.featureSlug;

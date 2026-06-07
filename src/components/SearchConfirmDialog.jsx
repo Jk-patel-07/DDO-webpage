@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { useSearch } from '@/hooks/useSearch';
-import { X, Eye, EyeOff } from 'lucide-react';
+import { X, EyeOff } from 'lucide-react';
 
 export function SearchConfirmDialog({ searchId, onClose }) {
   const { hideSearch, stopSearch, deleteSearch } = useSearch();

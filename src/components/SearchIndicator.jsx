@@ -2,7 +2,7 @@ import { useSearch } from '@/hooks/useSearch';
 import { X, ChevronUp } from 'lucide-react';
 
 export function SearchIndicator() {
-  const { searches, showSearch, stopSearch, deleteSearch } = useSearch();
+  const { searches, showSearch, stopSearch } = useSearch();
 
   const hiddenSearches = Object.values(searches).filter(s => !s.isVisible);
 
