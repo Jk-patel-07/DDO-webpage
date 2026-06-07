@@ -340,93 +340,150 @@
           <span>&times;</span>
         </button>
       </div>
-      <div class="history-popup-body convert-popup-body">
-        <label class="field compact-field">
-          <span>Feature name</span>
-          <div class="feature-input-row">
-            <span class="cfm-search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="m20 20-3.5-3.5"></path></svg>
-            </span>
-            <input id="featureSearchInput" type="text" placeholder="Battery, Login, Spotify, Wi-Fi..." />
-            <button class="cfm-search-action" id="featureVoiceSearchButton" type="button" aria-label="Voice search feature">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M8 22h8"/></svg>
-            </button>
-            <button class="cfm-search-action" id="clearFeatureSearchButton" type="button" aria-label="Clear feature search">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
-            </button>
+      <div class="history-popup-body convert-popup-body chat-style-popup-body">
+        <div class="feature-chat-toolbar">
+          <div class="selected-target-display" id="featureSelectedTargetDisplay">
+            <svg class="target-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+            <div class="selected-target-copy">
+              <span class="selected-target-label">Search Target</span>
+              <span id="featureSelectedTargetText">DDO Project</span>
+            </div>
           </div>
-        </label>
-        <div class="feature-toolbar-row">
-          <label class="feature-mode-field">
-            <span>Search mode</span>
-            <select id="featureSearchModeSelect">
-              <option value="quick">Quick Search</option>
-              <option value="smart" selected>Smart Search</option>
-              <option value="deep">Deep Search</option>
-              <option value="exact">Exact Search</option>
-              <option value="changed">Changed Files Only</option>
-            </select>
-          </label>
-          <button class="subtle-button" id="featureRecentSearchesButton" type="button">Recent</button>
-          <button class="subtle-button" id="featureIncludeIgnoredButton" type="button">Include Ignored Folders</button>
-          <span class="feature-shortcut-note">Ctrl + K</span>
-          <span class="feature-shortcut-note">Ctrl + Shift + F</span>
+          <button class="icon-button feature-toolbar-button" id="featureRecentLocationsButton" type="button" aria-label="Show recent locations" title="Recent locations">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          </button>
         </div>
-        <div class="feature-suggestions hidden" id="featureSuggestions"></div>
-        <div class="feature-filter-groups">
-          <div class="feature-filter-row" id="featureCategoryFilters">
-            <button class="mini-filter active" data-feature-category="all" type="button">All</button>
-            <button class="mini-filter" data-feature-category="frontend" type="button">Frontend</button>
-            <button class="mini-filter" data-feature-category="backend" type="button">Backend</button>
-            <button class="mini-filter" data-feature-category="styles" type="button">Styles</button>
-            <button class="mini-filter" data-feature-category="assets" type="button">Assets</button>
-            <button class="mini-filter" data-feature-category="tauri" type="button">Tauri</button>
-            <button class="mini-filter" data-feature-category="config" type="button">Configuration</button>
-            <button class="mini-filter" data-feature-category="git-history" type="button">Git History</button>
-          </div>
-          <div class="feature-filter-row" id="featureTypeFilters">
-            <button class="mini-filter" data-feature-type="JS" type="button">JS</button>
-            <button class="mini-filter" data-feature-type="JSX" type="button">JSX</button>
-            <button class="mini-filter" data-feature-type="TS" type="button">TS</button>
-            <button class="mini-filter" data-feature-type="TSX" type="button">TSX</button>
-            <button class="mini-filter" data-feature-type="CSS" type="button">CSS</button>
-            <button class="mini-filter" data-feature-type="HTML" type="button">HTML</button>
-            <button class="mini-filter" data-feature-type="JSON" type="button">JSON</button>
-            <button class="mini-filter" data-feature-type="Rust" type="button">Rust</button>
-            <button class="mini-filter" data-feature-type="Python" type="button">Python</button>
+
+        <div class="feature-target-selection" id="featureTargetSelection">
+          <div class="feature-target-list" id="featureTargetList"></div>
+          <button class="icon-button feature-target-add hidden" id="featureAddTargetButton" type="button" aria-label="Select more files or folders" title="Select more files or folders">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+          </button>
+        </div>
+
+        <div class="feature-chat-area" id="featureChatArea">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" class="empty-chat-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 20-3.5-3.5"></path><circle cx="11" cy="11" r="6"></circle></svg>
+            <p>What would you like to extract?</p>
+            <span>Type a feature name or natural language query below.</span>
           </div>
         </div>
-        <div class="summary-actions">
-          <button class="primary-button dark-button" id="runFeaturePreviewButton" type="button">Search</button>
-          <button class="subtle-button" id="stopFeatureSearchButton" type="button">Stop Search</button>
-          <button class="subtle-button" id="cancelFeatureConvertButton" type="button">Cancel</button>
-          <button class="subtle-button" id="undoFeatureConvertButton" type="button">Undo</button>
+
+        <div class="feature-thinking-indicator hidden" id="featureThinkingIndicator">
+          <div class="thinking-bubble">
+            <svg viewBox="0 0 24 24" class="ai-sparkle-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            <span id="featureThinkingText">Searching selected files...</span>
+            <div class="thinking-dots"><span></span><span></span><span></span></div>
+          </div>
         </div>
+
         <div class="inline-feedback error hidden" id="featureConvertError"></div>
-        <div class="feature-agent-status" id="featureAgentStatus">
-          <div class="feature-status-row">
-            <span class="feature-status-label">Progress</span>
-            <span class="feature-status-value" id="featureSearchProgressText">Ready to scan the DDO project.</span>
+
+        <div class="feature-chat-input-wrapper">
+          <div class="feature-suggestions hidden" id="featureSuggestions"></div>
+          <div class="feature-input-row chat-input-row">
+            <button class="cfm-search-action composer-action-button" id="featureOptionsButton" type="button" aria-label="Open search options" title="Options">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+            </button>
+            <textarea id="featureSearchInput" rows="1" placeholder="Ask naturally, for example: battery related code"></textarea>
+            <button class="cfm-search-action composer-action-button" id="featureVoiceSearchButton" type="button" aria-label="Voice search" title="Voice search">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+            </button>
+            <button class="cfm-search-action composer-action-button" id="clearFeatureSearchButton" type="button" aria-label="Clear feature search" title="Clear input">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+            </button>
+            <button class="cfm-search-action composer-action-button hidden" id="stopFeatureSearchButton" type="button" aria-label="Stop search" title="Stop search">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+            </button>
+            <button class="primary-button icon-button send-button" id="runFeaturePreviewButton" type="button" aria-label="Search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
           </div>
-          <div class="feature-status-row">
-            <span class="feature-status-label">Current file</span>
-            <span class="feature-status-value" id="featureSearchCurrentFile">-</span>
+          <div class="feature-input-hint">
+            <span>Enter to search</span>
+            <span>Shift + Enter for a new line</span>
+            <span>Ctrl + K opens this search</span>
           </div>
-          <div class="feature-status-grid" id="featureSearchSummaryGrid">
-            <div class="feature-status-card"><span>Files scanned</span><strong id="featureFilesScannedCount">0</strong></div>
-            <div class="feature-status-card"><span>Related files</span><strong id="featureRelatedFilesCount">0</strong></div>
-            <div class="feature-status-card"><span>Code sections</span><strong id="featureCodeSectionsCount">0</strong></div>
-            <div class="feature-status-card"><span>Dependencies</span><strong id="featureDependenciesCount">0</strong></div>
-            <div class="feature-status-card"><span>Conflicts</span><strong id="featureConflictsCount">0</strong></div>
+          <div class="feature-input-actions">
+            <button class="subtle-button" id="cancelFeatureConvertButton" type="button">Cancel</button>
+            <button class="subtle-button" id="undoFeatureConvertButton" type="button">Undo</button>
           </div>
         </div>
-        <div class="feature-live-log" id="featureLiveLog">
-          <div class="empty-state">AI activity will appear here while the search runs.</div>
+
+        <div class="feature-options-menu hidden" id="featureOptionsMenu" role="menu" aria-label="Feature search options">
+          <button class="feature-option-item" id="featureSelectFolderButton" type="button" title="Choose a folder to search">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>
+            </span>
+            <span>Select Folder</span>
+          </button>
+          <button class="feature-option-item" id="featureSelectFilesButton" type="button" title="Choose one or more files to search">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6H7a2 2 0 0 0-2 2Z"></path></svg>
+            </span>
+            <span>Select Files</span>
+          </button>
+          <button class="feature-option-item" id="featureUseCurrentProjectButton" type="button" title="Search the current project">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 9-4 9 4-9 4-9-4Z"></path><path d="m3 6 9 4 9-4"></path><path d="m3 12 9 4 9-4"></path><path d="m3 18 9 4 9-4"></path></svg>
+            </span>
+            <span>Use Current Project</span>
+          </button>
+          <button class="feature-option-item" id="featureOpenRecentLocationsButton" type="button" title="Use a recent location">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
+            </span>
+            <span>Recent Locations</span>
+          </button>
+          <button class="feature-option-item" id="featurePreviewCodeMenuButton" type="button" title="Preview matched code">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            </span>
+            <span>Preview Code</span>
+          </button>
+          <button class="feature-option-item" id="featureOpenFileMenuButton" type="button" title="Open the first matched file">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"></path></svg>
+            </span>
+            <span>Open File</span>
+          </button>
+          <button class="feature-option-item" id="featureShowConnectionsMenuButton" type="button" title="Show file connections">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07L11 5"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07L13 19"></path></svg>
+            </span>
+            <span>Show Connections</span>
+          </button>
+          <button class="feature-option-item" id="featureCreateFolderMenuButton" type="button" title="Create the feature folder">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+            </span>
+            <span>Create Feature Folder</span>
+          </button>
+          <button class="feature-option-item" id="featureUndoMenuButton" type="button" title="Undo the last conversion">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M20 20a8 8 0 0 0-8-8H4"></path></svg>
+            </span>
+            <span>Undo</span>
+          </button>
+          <button class="feature-option-item" id="featureCancelSearchMenuButton" type="button" title="Close the popup">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+            </span>
+            <span>Cancel Search</span>
+          </button>
+          <button class="feature-option-item" id="featureStopSearchMenuButton" type="button" title="Stop the active search">
+            <span class="feature-option-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+            </span>
+            <span>Stop Search</span>
+          </button>
         </div>
-        <div class="feature-preview-shell" id="featureConvertPreviewBody">
-          <div class="empty-state">Open a workspace and search for a feature to preview related files.</div>
+
+        <div class="feature-preview-shell hidden" id="featureConvertPreviewBody">
+          <!-- The chat messages and result UI will override this during the process -->
         </div>
-        <div class="summary-actions">
+        
+        <div class="summary-actions chat-summary-actions hidden" id="featureFinalActions">
           <button class="subtle-button" id="showFeatureConnectionsButton" type="button">Show Connections</button>
           <button class="subtle-button" id="previewSelectedFeatureCodeButton" type="button">Preview Code</button>
           <button class="subtle-button" id="openSelectedFeatureFileButton" type="button">Open File</button>

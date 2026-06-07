@@ -63,11 +63,10 @@ const state = {
   agentSearchLogs: [],
   agentSearchReport: null,
   selectedFeaturePaths: new Set(),
-  featureSearchMode: "smart",
-  featureCategoryFilters: new Set(["all"]),
-  featureTypeFilters: new Set(),
   includeIgnoredFolders: false,
   recentFeatureSearches: JSON.parse(localStorage.getItem("ddoCfmRecentFeatureSearches") || "[]"),
+  featureSearchTargets: [],
+  recentWorkspaceLocations: [],
 };
 
 const allowedExtensions = [
@@ -158,19 +157,20 @@ const featureConvertPopup = document.getElementById("featureConvertPopup");
 const featureSyncPopup = document.getElementById("featureSyncPopup");
 const featureSearchInput = document.getElementById("featureSearchInput");
 const syncFeatureInput = document.getElementById("syncFeatureInput");
-const featureConvertPreviewBody = document.getElementById("featureConvertPreviewBody");
 const featureSyncPreviewBody = document.getElementById("featureSyncPreviewBody");
 const featureConvertError = document.getElementById("featureConvertError");
 const featureSyncError = document.getElementById("featureSyncError");
-const featureSearchProgressText = document.getElementById("featureSearchProgressText");
-const featureSearchCurrentFile = document.getElementById("featureSearchCurrentFile");
-const featureFilesScannedCount = document.getElementById("featureFilesScannedCount");
-const featureRelatedFilesCount = document.getElementById("featureRelatedFilesCount");
-const featureCodeSectionsCount = document.getElementById("featureCodeSectionsCount");
-const featureDependenciesCount = document.getElementById("featureDependenciesCount");
-const featureConflictsCount = document.getElementById("featureConflictsCount");
-const featureLiveLog = document.getElementById("featureLiveLog");
 const featureSuggestions = document.getElementById("featureSuggestions");
+const featureTargetList = document.getElementById("featureTargetList");
+const featureThinkingIndicator = document.getElementById("featureThinkingIndicator");
+const featureThinkingText = document.getElementById("featureThinkingText");
+const featureChatArea = document.getElementById("featureChatArea");
+const featureSelectedTargetText = document.getElementById("featureSelectedTargetText");
+const featureAddTargetButton = document.getElementById("featureAddTargetButton");
+const featureOptionsMenu = document.getElementById("featureOptionsMenu");
+const featureOptionsButton = document.getElementById("featureOptionsButton");
+const featureVoiceSearchButton = document.getElementById("featureVoiceSearchButton");
+const stopFeatureSearchButton = document.getElementById("stopFeatureSearchButton");
 let bannerTimerId = 0;
 let agentSearchPollTimer = 0;
 let featureSuggestionTimer = 0;
@@ -307,6 +307,7 @@ function stopVoiceSearch() {
     voiceRecognition = null;
   }
   setVoiceListening(false);
+  featureVoiceSearchButton?.classList.remove("is-active");
 }
 
 function getSpeechRecognition() {
@@ -358,25 +359,16 @@ async function startFeatureVoiceSearch() {
   recognition.continuous = false;
   recognition.interimResults = false;
   recognition.lang = "en-IN";
-  recognition.onstart = () => {
-    featureSearchProgressText.textContent = "Listening for feature name...";
-  };
-  recognition.onend = () => {
-    if (state.agentSearchStatus === "idle") {
-      featureSearchProgressText.textContent = "Ready to scan the DDO project.";
-    }
-  };
-  recognition.onerror = () => {
-    if (state.agentSearchStatus === "idle") {
-      featureSearchProgressText.textContent = "Ready to scan the DDO project.";
-    }
-  };
+  recognition.onstart = () => featureVoiceSearchButton?.classList.add("is-active");
+  recognition.onend = () => featureVoiceSearchButton?.classList.remove("is-active");
+  recognition.onerror = () => featureVoiceSearchButton?.classList.remove("is-active");
   recognition.onresult = async (event) => {
     const transcript = event.results[0]?.[0]?.transcript?.trim();
     if (!transcript) {
       return;
     }
     featureSearchInput.value = transcript;
+    autoResizeFeatureSearchInput();
     await previewFeatureConvert();
   };
 
@@ -384,7 +376,7 @@ async function startFeatureVoiceSearch() {
   try {
     recognition.start();
   } catch {
-    featureSearchProgressText.textContent = "Ready to scan the DDO project.";
+    featureVoiceSearchButton?.classList.remove("is-active");
     showBanner("error", "Could not start voice search. Try again.");
   }
 }
@@ -443,6 +435,85 @@ function openFileInfoPopup() {
 function closeFeatureConvertPopup() {
   featureConvertPopup.classList.add("hidden");
   stopAgentSearchPolling();
+  closeFeatureOptionsMenu();
+  featureThinkingIndicator?.classList.add("hidden");
+  stopVoiceSearch();
+}
+
+function autoResizeFeatureSearchInput() {
+  if (!featureSearchInput) {
+    return;
+  }
+  featureSearchInput.style.height = "auto";
+  featureSearchInput.style.height = `${Math.min(featureSearchInput.scrollHeight, 130)}px`;
+}
+
+function scrollFeatureChatToBottom() {
+  if (!featureChatArea) {
+    return;
+  }
+  featureChatArea.scrollTop = featureChatArea.scrollHeight;
+}
+
+function closeFeatureOptionsMenu() {
+  featureOptionsMenu?.classList.add("hidden");
+}
+
+function toggleFeatureOptionsMenu() {
+  featureOptionsMenu?.classList.toggle("hidden");
+}
+
+function setFeatureChatEmptyState() {
+  if (!featureChatArea) {
+    return;
+  }
+  featureChatArea.innerHTML = `
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24" class="empty-chat-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 20-3.5-3.5"></path><circle cx="11" cy="11" r="6"></circle></svg>
+      <p>What would you like to extract?</p>
+      <span>Type a feature name or natural language query below.</span>
+    </div>
+  `;
+}
+
+function appendFeatureChatBubble(role, html) {
+  if (!featureChatArea) {
+    return;
+  }
+  if (featureChatArea.querySelector(".empty-state")) {
+    featureChatArea.innerHTML = "";
+  }
+  featureChatArea.insertAdjacentHTML("beforeend", `<div class="chat-bubble ${role === "user" ? "user-message" : "assistant-message"}">${html}</div>`);
+  scrollFeatureChatToBottom();
+}
+
+function featureTargetName(target) {
+  const normalizedPath = String(target?.path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+  if (!normalizedPath) {
+    return state.workspaceLabel || "Current project";
+  }
+  const parts = normalizedPath.split("/").filter(Boolean);
+  return parts[parts.length - 1] || normalizedPath;
+}
+
+function getFeatureTargetSearchLabel() {
+  if (!state.featureSearchTargets.length) {
+    return state.workspaceLabel || "current project";
+  }
+  if (state.featureSearchTargets.length === 1) {
+    return featureTargetName(state.featureSearchTargets[0]);
+  }
+  return `${state.featureSearchTargets.length} selected locations`;
+}
+
+function describeFeatureSearchScope() {
+  if (!state.featureSearchTargets.length) {
+    return state.workspaceLabel || "the current project";
+  }
+  if (state.featureSearchTargets.length === 1) {
+    return formatFeatureTargetLabel(state.featureSearchTargets[0]);
+  }
+  return `${state.featureSearchTargets.length} selected files or folders`;
 }
 
 function openFeatureConvertPopup() {
@@ -451,13 +522,23 @@ function openFeatureConvertPopup() {
   closeFileInfoPopup();
   setInlineMessage(featureConvertError, "");
   featureConvertPopup.classList.remove("hidden");
+  
   if (state.lastConvertedFeatureSlug && !featureSearchInput.value.trim()) {
     featureSearchInput.value = state.lastConvertedFeatureSlug;
   }
-  document.getElementById("featureSearchModeSelect").value = state.featureSearchMode;
+  updateFeatureSelectedTargetDisplay();
+  renderFeatureTargetList();
+  loadRecentWorkspaceLocations().catch(() => undefined);
+  setFeatureChatEmptyState();
+
+  const finalActions = document.getElementById("featureFinalActions");
+  if (finalActions) finalActions.classList.add("hidden");
+
+  closeFeatureOptionsMenu();
+  autoResizeFeatureSearchInput();
   featureSearchInput.focus();
   renderAgentSearchStatus();
-  renderFeatureSuggestions([]);
+  renderFeatureSuggestions(state.recentFeatureSearches);
 }
 
 function closeFeatureSyncPopup() {
@@ -509,67 +590,24 @@ function renderNotifications() {
     .join("");
 }
 
-function renderCodeSectionSummary(section) {
-  const preview = escapeHtml(section.snippet || "").slice(0, 220);
-  return `
-    <li>
-      <strong>${escapeHtml(section.sourcePath)}</strong>
-      <div class="feature-preview-meta">Lines ${section.startLine}-${section.endLine}</div>
-      <div class="feature-preview-meta">${preview}${preview.length >= 220 ? "..." : ""}</div>
-    </li>
-  `;
-}
-
-function setAgentSearchCounters(summary = {}) {
-  featureFilesScannedCount.textContent = summary.filesScanned || 0;
-  featureRelatedFilesCount.textContent = summary.relatedFilesFound || 0;
-  featureCodeSectionsCount.textContent = summary.relatedCodeSections || 0;
-  featureDependenciesCount.textContent = summary.dependenciesFound || 0;
-  featureConflictsCount.textContent = summary.possibleConflicts || 0;
-}
-
-function renderAgentSearchLogs(logs = []) {
-  if (!logs.length) {
-    featureLiveLog.innerHTML = '<div class="empty-state">AI activity will appear here while the search runs.</div>';
-    return;
-  }
-
-  const baseTime = new Date(logs[0].createdAt || Date.now()).getTime();
-  featureLiveLog.innerHTML = logs
-    .slice(-80)
-    .map((entry) => {
-      const elapsed = Math.max(0, (new Date(entry.createdAt || Date.now()).getTime() - baseTime) / 1000);
-      return `
-      <div class="feature-log-row">
-        <strong>${entry.level === "success" ? "✓" : entry.level === "warning" ? "!" : "•"}</strong>
-        <span>${escapeHtml(`${elapsed.toFixed(1)}s — ${entry.message}`)}</span>
-      </div>
-    `;
-    })
-    .join("");
-}
-
 function renderAgentSearchStatus() {
-  const report = state.agentSearchReport;
-  const scannedFileCount = new Set((state.agentSearchLogs || []).map((entry) => entry.filePath).filter(Boolean)).size;
-  const statusTextMap = {
-    idle: "Ready to scan the DDO project.",
-    running: "Searching DDO project...",
-    stopping: "Stopping AI search...",
-    stopped: "Search stopped.",
-    completed: "Search completed.",
-    failed: "Search failed.",
-  };
-  featureSearchProgressText.textContent = statusTextMap[state.agentSearchStatus] || "Ready to scan the DDO project.";
-  featureSearchCurrentFile.textContent = report?.currentFile || "-";
-  setAgentSearchCounters({
-    ...(report?.summary || {}),
-    filesScanned: report?.summary?.filesScanned || scannedFileCount,
-  });
-  if (report?.elapsedMs != null && state.agentSearchStatus !== "idle") {
-    featureSearchProgressText.textContent = `${featureSearchProgressText.textContent} ${Math.max(0, report.elapsedMs / 1000).toFixed(1)}s`;
+  if (state.agentSearchStatus === "running" || state.agentSearchStatus === "stopping") {
+    featureThinkingIndicator?.classList.remove("hidden");
+
+    if (state.agentSearchLogs && state.agentSearchLogs.length > 0) {
+      const latestLog = state.agentSearchLogs[state.agentSearchLogs.length - 1];
+      featureThinkingText.textContent = latestLog.message;
+    } else {
+      featureThinkingText.textContent = state.agentSearchStatus === "stopping"
+        ? "Stopping search..."
+        : `Searching in ${getFeatureTargetSearchLabel()}...`;
+    }
+    stopFeatureSearchButton?.classList.remove("hidden");
+    scrollFeatureChatToBottom();
+  } else {
+    featureThinkingIndicator?.classList.add("hidden");
+    stopFeatureSearchButton?.classList.add("hidden");
   }
-  renderAgentSearchLogs(state.agentSearchLogs);
 }
 
 function saveRecentFeatureSearch(query) {
@@ -578,7 +616,102 @@ function saveRecentFeatureSearch(query) {
   localStorage.setItem("ddoCfmRecentFeatureSearches", JSON.stringify(next));
 }
 
+async function loadRecentWorkspaceLocations() {
+  if (!state.token) {
+    return;
+  }
+  const result = await apiRequest(`${API_BASE_URL}/api/cfm/recent`, {
+    headers: authHeaders(),
+  });
+  state.recentWorkspaceLocations = result.recentFiles || [];
+}
+
+function formatFeatureTargetLabel(target) {
+  if (!target) {
+    return state.workspaceLabel || "Current project";
+  }
+  if (target.scopeType === "file") {
+    return target.path;
+  }
+  if (target.scopeType === "folder") {
+    return target.path || state.workspaceLabel || "Current project";
+  }
+  return state.workspaceLabel || "Current project";
+}
+
+function updateFeatureSelectedTargetDisplay() {
+  if (!featureSelectedTargetText) {
+    return;
+  }
+  if (!state.featureSearchTargets.length) {
+    featureSelectedTargetText.textContent = state.workspaceLabel || "Current Project";
+    featureAddTargetButton?.classList.add("hidden");
+    return;
+  }
+  featureAddTargetButton?.classList.remove("hidden");
+  if (state.featureSearchTargets.length === 1) {
+    featureSelectedTargetText.textContent = formatFeatureTargetLabel(state.featureSearchTargets[0]);
+    return;
+  }
+  const fileCount = state.featureSearchTargets.filter((item) => item.scopeType === "file").length;
+  const folderCount = state.featureSearchTargets.filter((item) => item.scopeType === "folder").length;
+  if (fileCount && !folderCount) {
+    featureSelectedTargetText.textContent = `selected files: ${fileCount}`;
+    return;
+  }
+  if (folderCount && !fileCount) {
+    featureSelectedTargetText.textContent = `selected folders: ${folderCount}`;
+    return;
+  }
+  featureSelectedTargetText.textContent = `selected locations: ${state.featureSearchTargets.length}`;
+}
+
+function renderFeatureTargetList() {
+  if (!featureTargetList) {
+    return;
+  }
+  if (!state.featureSearchTargets.length) {
+    featureTargetList.innerHTML = "";
+    return;
+  }
+  featureTargetList.innerHTML = state.featureSearchTargets
+    .map((target, index) => `
+      <span class="feature-target-chip">
+        <svg class="feature-target-chip-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${target.scopeType === "file" ? '<path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"></path>' : '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>'}</svg>
+        <span class="feature-target-chip-copy">
+          <strong>${escapeHtml(featureTargetName(target))}</strong>
+          <span>${escapeHtml(formatFeatureTargetLabel(target))}</span>
+        </span>
+        <button type="button" data-remove-feature-target="${index}" aria-label="Remove target">&times;</button>
+      </span>
+    `)
+    .join("");
+  featureTargetList.querySelectorAll("[data-remove-feature-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.featureSearchTargets.splice(Number(button.dataset.removeFeatureTarget), 1);
+      updateFeatureSelectedTargetDisplay();
+      renderFeatureTargetList();
+    });
+  });
+}
+
+function addFeatureSearchTarget(target) {
+  const normalized = {
+    path: String(target.path || "").replace(/^\/+/, ""),
+    scopeType: target.scopeType === "file" ? "file" : "folder",
+  };
+  const exists = state.featureSearchTargets.some((item) => item.path === normalized.path && item.scopeType === normalized.scopeType);
+  if (!exists) {
+    state.featureSearchTargets.push(normalized);
+  }
+  updateFeatureSelectedTargetDisplay();
+  renderFeatureTargetList();
+}
+
 function renderFeatureSuggestions(items = []) {
+  if (!featureSuggestions) {
+    return;
+  }
   if (!items.length) {
     featureSuggestions.classList.add("hidden");
     featureSuggestions.innerHTML = "";
@@ -619,16 +752,37 @@ async function loadFeatureSuggestions() {
   renderFeatureSuggestions(result.suggestions || []);
 }
 
-function currentFeatureCategoryFilters() {
-  return [...state.featureCategoryFilters];
-}
-
-function currentFeatureTypeFilters() {
-  return [...state.featureTypeFilters];
-}
-
 function flattenAgenticResults(report) {
   return (report?.groupedResults || []).flatMap((group) => group.items || []);
+}
+
+function findFeatureResultItem(filePath = "") {
+  return flattenAgenticResults(state.agentSearchReport).find((item) => item.filePath === filePath) || null;
+}
+
+function featureResultLineSummary(item) {
+  if (!item?.lineRanges?.length) {
+    return "Line numbers unavailable";
+  }
+  return item.lineRanges.join(", ");
+}
+
+function featureResultPreview(item) {
+  const firstSection = item?.codeSections?.[0];
+  return firstSection?.snippet || "No preview snippet available.";
+}
+
+function featureResultExplainSimply(item) {
+  const parts = [
+    `${item.filePath.split("/").pop()} is related because ${String(item.reason || "it matches the feature search").toLowerCase()}.`,
+  ];
+  if (item.sectionNames?.length) {
+    parts.push(`The main part to look at is ${item.sectionNames[0]}.`);
+  }
+  if (item.dependencies?.length) {
+    parts.push(`It also connects to ${item.dependencies.slice(0, 3).join(", ")}.`);
+  }
+  return parts.join(" ");
 }
 
 function ensureSelectedFeaturePaths(report) {
@@ -644,189 +798,125 @@ function ensureSelectedFeaturePaths(report) {
 
 function renderFeatureConvertPreview(preview) {
   if (!preview) {
-    featureConvertPreviewBody.innerHTML = '<div class="empty-state">Open a workspace and search for a feature to preview related files.</div>';
     return;
   }
 
-  featureConvertPreviewBody.innerHTML = `
-    <div class="feature-preview-grid">
-      <div class="feature-preview-card">
-        <h5>Related files found</h5>
-        <div class="feature-preview-meta">${preview.relatedFiles.length} files matched for ${escapeHtml(preview.featureName)}</div>
-        <ul class="feature-preview-list compact">
-          ${preview.relatedFiles.map((item) => `
-            <li>
-              <strong>${escapeHtml(item.sourcePath)}</strong>
-              <div class="feature-preview-meta">${escapeHtml(item.category)} | ${escapeHtml(item.extractionMode)} | score ${item.score}</div>
-            </li>
-          `).join("") || "<li>No related files found.</li>"}
-        </ul>
-      </div>
-      <div class="feature-preview-card">
-        <h5>Code sections found</h5>
-        <ul class="feature-preview-list compact">
-          ${preview.codeSections.slice(0, 12).map(renderCodeSectionSummary).join("") || "<li>No code sections found.</li>"}
-        </ul>
-      </div>
-      <div class="feature-preview-card">
-        <h5>New folder structure</h5>
-        <div class="feature-preview-chip-row">
-          ${preview.newFolderStructure.map((item) => `<span class="feature-preview-chip">${escapeHtml(item)}</span>`).join("")}
-        </div>
-      </div>
-      <div class="feature-preview-card">
-        <h5>Files that will be created</h5>
-        <ul class="feature-preview-list compact">
-          ${preview.filesToCreate.map((item) => `
-            <li>
-              <strong>${escapeHtml(item.targetPath)}</strong>
-              <div class="feature-preview-meta">from ${escapeHtml(item.sourcePath)} (${escapeHtml(item.extractionMode)})</div>
-            </li>
-          `).join("") || "<li>No files will be created.</li>"}
-        </ul>
-      </div>
-      <div class="feature-preview-card">
-        <h5>Imports that will be reviewed</h5>
-        <ul class="feature-preview-list compact">
-          ${preview.importsToChange.map((item) => `
-            <li>
-              <strong>${escapeHtml(item.filePath)}</strong>
-              <div class="feature-preview-meta">${escapeHtml(item.importPath)}</div>
-            </li>
-          `).join("") || "<li>No import path warnings were detected for the converted copy.</li>"}
-        </ul>
-      </div>
+  appendFeatureChatBubble("assistant", `
+    <div style="margin-bottom: 8px;"><strong>Preview ready for ${escapeHtml(preview.featureName)}</strong></div>
+    <div class="feature-summary-grid">
+      <div class="feature-summary-stat"><span>Files to create</span><strong>${preview.filesToCreate?.length || 0}</strong></div>
+      <div class="feature-summary-stat"><span>Code sections</span><strong>${preview.codeSections?.length || 0}</strong></div>
     </div>
-  `;
+    <div class="feature-result-meta" style="margin-top: 12px;">This feature folder is ready to be created.</div>
+  `);
 }
 
 function renderAgenticSearchResults(report, mode = "results") {
   if (!report?.groupedResults?.length) {
-    featureConvertPreviewBody.innerHTML = '<div class="empty-state">No related feature files were found yet.</div>';
+    appendFeatureChatBubble(
+      "assistant",
+      "No related code or files were found for this query. Try another keyword or select a different folder.",
+    );
     return;
   }
 
   ensureSelectedFeaturePaths(report);
 
   if (mode === "connections") {
-    featureConvertPreviewBody.innerHTML = `
-      <div class="feature-preview-grid">
-        ${report.connections.map((connection) => `
-          <div class="feature-preview-card">
-            <h5>${escapeHtml(connection.sourcePath)}</h5>
-            <ul class="feature-preview-list">
-              ${(connection.edges || []).map((edge) => `<li>${escapeHtml(edge.label)} -> ${escapeHtml(edge.targetPath)}</li>`).join("") || "<li>No direct related-file connections detected.</li>"}
-            </ul>
-          </div>
-        `).join("")}
+    const connectionLines = (report.connections || [])
+      .slice(0, 8)
+      .map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span class="feature-result-meta">via ${escapeHtml(connection.via)}</span>` : ""}</div>`)
+      .join("");
+    appendFeatureChatBubble("assistant", `
+      <strong>Feature connections</strong>
+      <div class="feature-results-grid">
+        <div class="feature-result-card">
+          ${connectionLines || '<div class="feature-result-empty">No file-to-file connections were detected yet.</div>'}
+        </div>
       </div>
-    `;
+    `);
     return;
   }
 
   if (mode === "preview-code") {
-    const selected = flattenAgenticResults(report).filter((item) => state.selectedFeaturePaths.has(item.filePath));
-    featureConvertPreviewBody.innerHTML = `
-      <div class="feature-preview-grid">
-        ${selected.map((item) => `
-          <div class="feature-preview-card">
-            <h5>${escapeHtml(item.filePath)}</h5>
-            <div class="feature-preview-meta">${escapeHtml(item.reason)}</div>
-            <ul class="feature-preview-list compact">
-              ${(item.codeSections || []).map((section) => `
-                <li>
-                  <strong>Lines ${section.startLine}-${section.endLine}</strong>
-                  <div class="feature-preview-meta">${escapeHtml(section.snippet).slice(0, 260)}${section.snippet.length > 260 ? "..." : ""}</div>
-                </li>
-              `).join("") || "<li>No related code sections found.</li>"}
-            </ul>
+    const previewCards = flattenAgenticResults(report)
+      .filter((item) => state.selectedFeaturePaths.has(item.filePath))
+      .slice(0, 6)
+      .map((item) => `
+        <div class="feature-result-card">
+          <div class="feature-result-head">
+            <div class="feature-result-title">
+              <strong>${escapeHtml(item.filePath.split("/").pop())}</strong>
+              <span class="feature-result-path">${escapeHtml(item.filePath)}</span>
+            </div>
+            <span class="feature-result-relevance">${escapeHtml(item.relevance || "Related")}</span>
           </div>
-        `).join("")}
-      </div>
-    `;
+          <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+          <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
+        </div>
+      `)
+      .join("");
+    appendFeatureChatBubble("assistant", `
+      <strong>Code preview</strong>
+      <div class="feature-results-grid">${previewCards}</div>
+    `);
     return;
   }
 
-  featureConvertPreviewBody.innerHTML = `
-    <div class="feature-preview-grid">
-      <div class="feature-preview-card">
-        <h5>${escapeHtml(report.featureName || "Feature")} Feature Results</h5>
-        <div class="feature-preview-meta">Files indexed: ${report.summary?.filesIndexed || 0}</div>
-        <div class="feature-preview-meta">Files searched: ${report.summary?.filesSearched || 0}</div>
-        <div class="feature-preview-meta">Files scanned: ${report.summary?.filesScanned || 0}</div>
-        <div class="feature-preview-meta">Related files found: ${report.summary?.relatedFilesFound || 0}</div>
-        <div class="feature-preview-meta">Related code sections: ${report.summary?.relatedCodeSections || 0}</div>
-        <div class="feature-preview-meta">Dependencies found: ${report.summary?.dependenciesFound || 0}</div>
-        <div class="feature-preview-meta">Possible conflicts: ${report.summary?.possibleConflicts || 0}</div>
+  const filesCount = report.groupedResults.reduce((sum, g) => sum + g.items.length, 0);
+  const cardsHtml = report.groupedResults
+    .map((group) => `
+      <div class="feature-result-card">
+        <div class="feature-result-head">
+          <div class="feature-result-title">
+            <strong>${escapeHtml(group.label)}</strong>
+            <span class="feature-result-meta">${group.items.length} matched file${group.items.length === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+        <div class="feature-results-grid">
+          ${group.items.slice(0, 4).map((item) => `
+            <div class="feature-result-card">
+              <div class="feature-result-head">
+                <div class="feature-result-title">
+                  <strong>${escapeHtml(item.filePath.split("/").pop())}</strong>
+                  <span class="feature-result-path">${escapeHtml(item.filePath)}</span>
+                </div>
+                <span class="feature-result-relevance">${escapeHtml(item.relevance || "Related")}</span>
+              </div>
+              <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+              <div class="feature-result-meta">Section: ${escapeHtml(item.sectionNames?.[0] || "Related section")}</div>
+              <div class="feature-result-reason">${escapeHtml(item.reason || "Matched feature-related logic.")}</div>
+              <div class="feature-result-meta">Dependencies: ${escapeHtml((item.dependencies || []).slice(0, 4).join(", ") || "None")}</div>
+              <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
+              <div class="feature-result-actions">
+                <button class="feature-action-mini" type="button" data-open-feature-file="${escapeHtml(item.filePath)}">Open File</button>
+                <button class="feature-action-mini" type="button" data-preview-feature-file="${escapeHtml(item.filePath)}">Preview Code</button>
+                <button class="feature-action-mini" type="button" data-connections-feature-file="${escapeHtml(item.filePath)}">Show Connections</button>
+                <button class="feature-action-mini feature-explain-button" type="button" data-explain-feature-file="${escapeHtml(item.filePath)}" title="Explain Simply" aria-label="Explain Simply">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 4.1 3 5.2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.8A6 6 0 0 0 18 9a6 6 0 0 0-6-6Z"></path><path d="M10 21h4"></path></svg>
+                </button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
       </div>
-      ${report.groupedResults.map((group) => `
-        <div class="feature-preview-card">
-          <h5>${escapeHtml(group.label)}</h5>
-          <ul class="feature-preview-list compact">
-            ${group.items.map((item) => `
-              <li>
-                <label style="display:flex; gap:8px; align-items:flex-start;">
-                  <input type="checkbox" data-feature-select="${escapeHtml(item.filePath)}" ${state.selectedFeaturePaths.has(item.filePath) ? "checked" : ""} />
-                  <span style="display:grid; gap:4px;">
-                    <strong>${escapeHtml(item.filePath)}</strong>
-                    <span class="feature-preview-meta">Lines ${escapeHtml(item.lineRanges.join(", ") || "-")}</span>
-                    <span class="feature-preview-meta">Found: ${escapeHtml(item.sectionNames.join(", ") || "Related section")}</span>
-                    <span class="feature-preview-meta">Why: ${escapeHtml(item.reason)}</span>
-                    <span class="feature-preview-meta">Relevance: ${escapeHtml(item.relevance || "Possible Match")}</span>
-                    <span class="feature-preview-meta">Imports: ${escapeHtml((item.dependencies || []).join(", ") || "-")}</span>
-                    <span class="feature-preview-meta">Exports: ${escapeHtml((item.exports || []).join(", ") || "-")}</span>
-                    <div class="summary-actions" style="margin-top:4px;">
-                      <button class="subtle-button" type="button" data-open-agent-file="${escapeHtml(item.filePath)}">Open File</button>
-                      <button class="subtle-button" type="button" data-preview-agent-file="${escapeHtml(item.filePath)}">Preview</button>
-                    </div>
-                  </span>
-                </label>
-              </li>
-            `).join("")}
-          </ul>
-        </div>
-      `).join("")}
-      ${report.warnings?.length ? `
-        <div class="feature-preview-card conflict-card">
-          <h5>Warnings and conflicts</h5>
-          <ul class="feature-preview-list">
-            ${report.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}
-          </ul>
-        </div>
-      ` : ""}
-      ${report.gitHistory?.length ? `
-        <div class="feature-preview-card">
-          <h5>Git History</h5>
-          <ul class="feature-preview-list compact">
-            ${report.gitHistory.map((entry) => `<li>${escapeHtml(entry.commit)}</li>`).join("")}
-          </ul>
-        </div>
-      ` : ""}
+    `)
+    .join("");
+
+  appendFeatureChatBubble("assistant", `
+    <div style="margin-bottom: 8px;"><strong>Found ${filesCount} related files</strong></div>
+    <div class="feature-summary-grid">
+      <div class="feature-summary-stat"><span>Files searched</span><strong>${report.summary?.filesSearched ?? filesCount}</strong></div>
+      <div class="feature-summary-stat"><span>Related files</span><strong>${report.summary?.relatedFilesFound || filesCount}</strong></div>
+      <div class="feature-summary-stat"><span>Code sections</span><strong>${report.summary?.relatedCodeSections || 0}</strong></div>
+      <div class="feature-summary-stat"><span>Dependencies</span><strong>${report.summary?.dependenciesFound || 0}</strong></div>
     </div>
-  `;
-
-  featureConvertPreviewBody.querySelectorAll("[data-feature-select]").forEach((input) => {
-    input.addEventListener("change", () => {
-      if (input.checked) {
-        state.selectedFeaturePaths.add(input.dataset.featureSelect);
-      } else {
-        state.selectedFeaturePaths.delete(input.dataset.featureSelect);
-      }
-    });
-  });
-
-  featureConvertPreviewBody.querySelectorAll("[data-open-agent-file]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await openWorkspaceTarget(button.dataset.openAgentFile || "");
-      closeFeatureConvertPopup();
-    });
-  });
-
-  featureConvertPreviewBody.querySelectorAll("[data-preview-agent-file]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await openWorkspaceTarget(button.dataset.previewAgentFile || "");
-    });
-  });
+    <div class="feature-result-meta" style="margin-top: 12px;">Search time: ${((report.elapsedMs || 0) / 1000).toFixed(1)} seconds. Searching in ${escapeHtml(describeFeatureSearchScope())}.</div>
+    <div class="feature-results-grid">${cardsHtml}</div>
+  `);
+  
+  const finalActions = document.getElementById("featureFinalActions");
+  if (finalActions) finalActions.classList.remove("hidden");
 }
 
 function renderFeatureSyncPreview(preview) {
@@ -1984,10 +2074,16 @@ async function previewFeatureConvert() {
   }
 
   stopAgentSearchPolling();
+  closeFeatureOptionsMenu();
   state.agentSearchReport = null;
   state.agentSearchLogs = [];
   state.agentSearchStatus = "running";
   state.selectedFeaturePaths = new Set();
+  document.getElementById("featureFinalActions")?.classList.add("hidden");
+  appendFeatureChatBubble("user", `
+    ${escapeHtml(featureName)}
+    <div class="feature-result-meta" style="margin-top:6px;">Searching in ${escapeHtml(describeFeatureSearchScope())}</div>
+  `);
   renderAgentSearchStatus();
 
   const result = await apiRequest(`${API_BASE_URL}/api/cfm/search/agent/start`, {
@@ -1996,16 +2092,18 @@ async function previewFeatureConvert() {
     body: JSON.stringify({
       workspaceId: state.workspaceId,
       featureName,
-      mode: state.featureSearchMode,
-      categoryFilters: currentFeatureCategoryFilters(),
-      typeFilters: currentFeatureTypeFilters(),
-      includeIgnored: state.includeIgnoredFolders,
+      mode: "smart",
+      includeIgnored: false,
+      targetPaths: state.featureSearchTargets,
     }),
   });
 
   state.agentSearchJobId = result.jobId || "";
   saveRecentFeatureSearch(featureName);
   setInlineMessage(featureConvertError, "");
+  featureSearchInput.value = "";
+  autoResizeFeatureSearchInput();
+  renderFeatureSuggestions(state.recentFeatureSearches);
   startAgentSearchPolling();
 }
 
@@ -2015,7 +2113,7 @@ async function applyFeatureConvert() {
     return;
   }
 
-  const featureName = featureSearchInput.value.trim();
+  const featureName = state.agentSearchReport?.featureName || state.lastConvertedFeatureSlug || featureSearchInput.value.trim();
   if (!featureName) {
     setInlineMessage(featureConvertError, "Feature name is required.", "error");
     return;
@@ -2036,11 +2134,18 @@ async function applyFeatureConvert() {
   state.featureConvertPreview = result.preview || state.featureConvertPreview;
   state.lastConvertedFeatureSlug = result.featureSlug || state.lastConvertedFeatureSlug;
   renderTree();
-  renderAgenticSearchResults(state.agentSearchReport || {
-    groupedResults: [],
-    warnings: [],
-    connections: [],
-  });
+  
+  const chatArea = document.getElementById("featureChatArea");
+  if (chatArea) {
+    chatArea.innerHTML += `
+      <div class="chat-bubble assistant-message">
+        <strong>Feature Folder Created</strong>
+        <p>The feature "${escapeHtml(featureName)}" was successfully created and extracted.</p>
+      </div>
+    `;
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
   syncFeatureInput.value = state.lastConvertedFeatureSlug;
   showBanner("success", result.message || "Feature folder created successfully.");
 }
@@ -2109,46 +2214,6 @@ function stopAgentSearchPolling() {
   }
 }
 
-function toggleFeatureCategoryFilter(button) {
-  const value = button.dataset.featureCategory;
-  if (!value) {
-    return;
-  }
-  if (value === "all") {
-    state.featureCategoryFilters = new Set(["all"]);
-    document.querySelectorAll("[data-feature-category]").forEach((node) => node.classList.toggle("active", node === button));
-    return;
-  }
-  state.featureCategoryFilters.delete("all");
-  if (state.featureCategoryFilters.has(value)) {
-    state.featureCategoryFilters.delete(value);
-  } else {
-    state.featureCategoryFilters.add(value);
-  }
-  if (!state.featureCategoryFilters.size) {
-    state.featureCategoryFilters.add("all");
-  }
-  document.querySelectorAll("[data-feature-category]").forEach((node) => {
-    const active = node.dataset.featureCategory === "all"
-      ? state.featureCategoryFilters.has("all")
-      : state.featureCategoryFilters.has(node.dataset.featureCategory);
-    node.classList.toggle("active", active);
-  });
-}
-
-function toggleFeatureTypeFilter(button) {
-  const value = button.dataset.featureType;
-  if (!value) {
-    return;
-  }
-  if (state.featureTypeFilters.has(value)) {
-    state.featureTypeFilters.delete(value);
-  } else {
-    state.featureTypeFilters.add(value);
-  }
-  button.classList.toggle("active", state.featureTypeFilters.has(value));
-}
-
 async function pollAgentSearchStatus() {
   if (!state.workspaceId || !state.agentSearchJobId) {
     stopAgentSearchPolling();
@@ -2207,6 +2272,7 @@ async function stopFeatureSearch() {
     }),
   });
   state.agentSearchStatus = "stopping";
+  appendFeatureChatBubble("assistant", "Stopping the current search. I’ll keep the results already found.");
   renderAgentSearchStatus();
 }
 
@@ -2833,8 +2899,7 @@ document.getElementById("closeFeatureSyncPopupButton").addEventListener("click",
 document.getElementById("cancelFeatureConvertButton").addEventListener("click", closeFeatureConvertPopup);
 document.getElementById("cancelFeatureSyncButton").addEventListener("click", closeFeatureSyncPopup);
 document.getElementById("runFeaturePreviewButton").addEventListener("click", previewFeatureConvert);
-document.getElementById("featureVoiceSearchButton").addEventListener("click", startFeatureVoiceSearch);
-document.getElementById("stopFeatureSearchButton").addEventListener("click", stopFeatureSearch);
+stopFeatureSearchButton.addEventListener("click", stopFeatureSearch);
 document.getElementById("applyFeatureConvertButton").addEventListener("click", applyFeatureConvert);
 document.getElementById("undoFeatureConvertButton").addEventListener("click", undoFeatureConvert);
 document.getElementById("showFeatureConnectionsButton").addEventListener("click", showFeatureConnections);
@@ -2878,8 +2943,10 @@ searchInput.addEventListener("input", async () => {
 });
 featureSearchInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
-    event.preventDefault();
-    await previewFeatureConvert();
+    if (!event.shiftKey) {
+      event.preventDefault();
+      await previewFeatureConvert();
+    }
   }
   if (event.key === "Escape") {
     event.preventDefault();
@@ -2891,6 +2958,7 @@ featureSearchInput.addEventListener("keydown", async (event) => {
   }
 });
 featureSearchInput.addEventListener("input", () => {
+  autoResizeFeatureSearchInput();
   if (featureSuggestionTimer) {
     window.clearTimeout(featureSuggestionTimer);
   }
@@ -2898,31 +2966,168 @@ featureSearchInput.addEventListener("input", () => {
     loadFeatureSuggestions().catch(() => undefined);
   }, 180);
 });
+featureChatArea?.addEventListener("click", async (event) => {
+  const openButton = event.target.closest("[data-open-feature-file]");
+  if (openButton) {
+    await openWorkspaceTarget(openButton.dataset.openFeatureFile || "");
+    closeFeatureConvertPopup();
+    return;
+  }
+
+  const previewButton = event.target.closest("[data-preview-feature-file]");
+  if (previewButton) {
+    const item = findFeatureResultItem(previewButton.dataset.previewFeatureFile || "");
+    if (!item) {
+      return;
+    }
+    appendFeatureChatBubble("assistant", `
+      <strong>Code preview for ${escapeHtml(item.filePath.split("/").pop())}</strong>
+      <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+      <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
+    `);
+    return;
+  }
+
+  const connectionsButton = event.target.closest("[data-connections-feature-file]");
+  if (connectionsButton) {
+    const filePath = connectionsButton.dataset.connectionsFeatureFile || "";
+    const relatedConnections = (state.agentSearchReport?.connections || []).filter((connection) => connection.from === filePath || connection.to === filePath);
+    appendFeatureChatBubble("assistant", `
+      <strong>Connections for ${escapeHtml(filePath.split("/").pop())}</strong>
+      <div class="feature-results-grid">
+        <div class="feature-result-card">
+          ${relatedConnections.length
+            ? relatedConnections.map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span class="feature-result-meta">via ${escapeHtml(connection.via)}</span>` : ""}</div>`).join("")
+            : '<div class="feature-result-empty">No direct connections were detected for this file.</div>'}
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  const explainButton = event.target.closest("[data-explain-feature-file]");
+  if (explainButton) {
+    const item = findFeatureResultItem(explainButton.dataset.explainFeatureFile || "");
+    if (!item) {
+      return;
+    }
+    appendFeatureChatBubble("assistant", `
+      <strong>Simple explanation</strong>
+      <div class="feature-simple-copy">${escapeHtml(featureResultExplainSimply(item))}</div>
+    `);
+  }
+});
 syncFeatureInput.addEventListener("keydown", async (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
     await previewFeatureSync();
   }
 });
-document.getElementById("featureSearchModeSelect").addEventListener("change", (event) => {
-  state.featureSearchMode = event.target.value;
-});
-document.getElementById("featureRecentSearchesButton").addEventListener("click", () => {
-  renderFeatureSuggestions(state.recentFeatureSearches);
-});
-document.getElementById("featureIncludeIgnoredButton").addEventListener("click", (event) => {
-  state.includeIgnoredFolders = !state.includeIgnoredFolders;
-  event.currentTarget.classList.toggle("active", state.includeIgnoredFolders);
-});
 document.getElementById("clearFeatureSearchButton").addEventListener("click", () => {
   featureSearchInput.value = "";
+  autoResizeFeatureSearchInput();
   renderFeatureSuggestions(state.recentFeatureSearches);
 });
-document.querySelectorAll("[data-feature-category]").forEach((button) => {
-  button.addEventListener("click", () => toggleFeatureCategoryFilter(button));
+featureOptionsButton.addEventListener("click", () => {
+  toggleFeatureOptionsMenu();
 });
-document.querySelectorAll("[data-feature-type]").forEach((button) => {
-  button.addEventListener("click", () => toggleFeatureTypeFilter(button));
+featureVoiceSearchButton.addEventListener("click", async () => {
+  if (voiceRecognition) {
+    stopVoiceSearch();
+    featureVoiceSearchButton.classList.remove("is-active");
+    return;
+  }
+  await startFeatureVoiceSearch();
+});
+featureAddTargetButton?.addEventListener("click", () => {
+  toggleFeatureOptionsMenu();
+});
+document.getElementById("featureSelectFolderButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+  if (!state.currentPath) {
+    addFeatureSearchTarget({ path: "", scopeType: "folder" });
+    showBanner("success", "Current project added as a search folder.");
+    return;
+  }
+  if (state.currentItemType === "folder") {
+    addFeatureSearchTarget({ path: state.currentPath, scopeType: "folder" });
+    showBanner("success", `${state.currentPath} added to search targets.`);
+    return;
+  }
+  const parent = state.currentPath.split("/").slice(0, -1).join("/");
+  addFeatureSearchTarget({ path: parent, scopeType: "folder" });
+  showBanner("success", `${parent || state.workspaceLabel || "Current project"} added to search targets.`);
+});
+document.getElementById("featureSelectFilesButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+  if (state.currentItemType !== "file" || !state.currentPath) {
+    showBanner("error", "Open a file first, then use Select Files.");
+    return;
+  }
+  addFeatureSearchTarget({ path: state.currentPath, scopeType: "file" });
+  showBanner("success", `${state.currentPath} added to search targets.`);
+});
+document.getElementById("featureUseCurrentProjectButton").addEventListener("click", () => {
+  closeFeatureOptionsMenu();
+  state.featureSearchTargets = [];
+  updateFeatureSelectedTargetDisplay();
+  renderFeatureTargetList();
+  showBanner("success", "Search target reset to the current project.");
+});
+async function useRecentFeatureLocations() {
+  closeFeatureOptionsMenu();
+  await loadRecentWorkspaceLocations().catch(() => undefined);
+  if (!state.recentWorkspaceLocations.length) {
+    showBanner("error", "No recent locations found yet.");
+    return;
+  }
+  state.featureSearchTargets = state.recentWorkspaceLocations
+    .slice(0, 4)
+    .map((item) => ({
+      path: item.targetPath || "",
+      scopeType: item.itemType === "folder" ? "folder" : "file",
+    }));
+  updateFeatureSelectedTargetDisplay();
+  renderFeatureTargetList();
+  showBanner("success", "Recent locations added to search targets.");
+}
+document.getElementById("featureRecentLocationsButton").addEventListener("click", useRecentFeatureLocations);
+document.getElementById("featureOpenRecentLocationsButton").addEventListener("click", useRecentFeatureLocations);
+document.getElementById("featurePreviewCodeMenuButton").addEventListener("click", () => {
+  closeFeatureOptionsMenu();
+  previewSelectedFeatureCode();
+});
+document.getElementById("featureOpenFileMenuButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  await openFirstSelectedFeatureFile();
+});
+document.getElementById("featureShowConnectionsMenuButton").addEventListener("click", () => {
+  closeFeatureOptionsMenu();
+  showFeatureConnections();
+});
+document.getElementById("featureCreateFolderMenuButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  await applyFeatureConvert();
+});
+document.getElementById("featureUndoMenuButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  await undoFeatureConvert();
+});
+document.getElementById("featureCancelSearchMenuButton").addEventListener("click", () => {
+  closeFeatureOptionsMenu();
+  closeFeatureConvertPopup();
+});
+document.getElementById("featureStopSearchMenuButton").addEventListener("click", async () => {
+  closeFeatureOptionsMenu();
+  await stopFeatureSearch();
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
@@ -3125,6 +3330,9 @@ window.addEventListener("click", (event) => {
   if (event.target === featureSyncPopup) {
     closeFeatureSyncPopup();
   }
+  if (!event.target.closest("#featureOptionsMenu") && !event.target.closest("#featureOptionsButton") && !event.target.closest("#featureAddTargetButton")) {
+    closeFeatureOptionsMenu();
+  }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");
   }
@@ -3139,9 +3347,8 @@ window.addEventListener("keydown", async (event) => {
   }
   if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
-    state.featureSearchMode = "deep";
-    document.getElementById("featureSearchModeSelect").value = "deep";
     openFeatureConvertPopup();
+    featureSearchInput.focus();
     return;
   }
   if (event.key === "Escape" && !featureConvertPopup.classList.contains("hidden")) {
