@@ -469,9 +469,9 @@ function setFeatureChatEmptyState() {
   }
   featureChatArea.innerHTML = `
     <div class="empty-state">
-      <svg viewBox="0 0 24 24" class="empty-chat-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 20-3.5-3.5"></path><circle cx="11" cy="11" r="6"></circle></svg>
-      <p>What would you like to extract?</p>
-      <span>Type a feature name or natural language query below.</span>
+      <svg class="gemini-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+      <p class="gemini-empty-heading">What would you like to extract?</p>
+      <p class="gemini-empty-sub">Type a feature name or natural language query below.</p>
     </div>
   `;
 }
@@ -483,7 +483,8 @@ function appendFeatureChatBubble(role, html) {
   if (featureChatArea.querySelector(".empty-state")) {
     featureChatArea.innerHTML = "";
   }
-  featureChatArea.insertAdjacentHTML("beforeend", `<div class="chat-bubble ${role === "user" ? "user-message" : "assistant-message"}">${html}</div>`);
+  const className = role === "user" ? "gemini-user-msg" : "gemini-assistant-msg";
+  featureChatArea.insertAdjacentHTML("beforeend", `<div class="${className}">${html}</div>`);
   scrollFeatureChatToBottom();
 }
 
@@ -815,7 +816,7 @@ function renderAgenticSearchResults(report, mode = "results") {
   if (!report?.groupedResults?.length) {
     appendFeatureChatBubble(
       "assistant",
-      "No related code or files were found for this query. Try another keyword or select a different folder.",
+      '<div class="gemini-no-results">No related code or files were found for this query. Try another keyword or select a different folder.</div>',
     );
     return;
   }
@@ -825,15 +826,11 @@ function renderAgenticSearchResults(report, mode = "results") {
   if (mode === "connections") {
     const connectionLines = (report.connections || [])
       .slice(0, 8)
-      .map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span class="feature-result-meta">via ${escapeHtml(connection.via)}</span>` : ""}</div>`)
+      .map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span style="color:rgba(255,255,255,0.45);font-size:0.78rem;">via ${escapeHtml(connection.via)}</span>` : ""}</div>`)
       .join("");
     appendFeatureChatBubble("assistant", `
-      <strong>Feature connections</strong>
-      <div class="feature-results-grid">
-        <div class="feature-result-card">
-          ${connectionLines || '<div class="feature-result-empty">No file-to-file connections were detected yet.</div>'}
-        </div>
-      </div>
+      <div style="margin-bottom:8px;"><strong>Feature connections</strong></div>
+      ${connectionLines || '<div style="color:rgba(255,255,255,0.5);font-size:0.85rem;">No file-to-file connections were detected yet.</div>'}
     `);
     return;
   }
@@ -843,22 +840,22 @@ function renderAgenticSearchResults(report, mode = "results") {
       .filter((item) => state.selectedFeaturePaths.has(item.filePath))
       .slice(0, 6)
       .map((item) => `
-        <div class="feature-result-card">
-          <div class="feature-result-head">
-            <div class="feature-result-title">
-              <strong>${escapeHtml(item.filePath.split("/").pop())}</strong>
-              <span class="feature-result-path">${escapeHtml(item.filePath)}</span>
+        <div class="gemini-result-card">
+          <div class="gemini-result-head">
+            <div class="gemini-result-title-group">
+              <strong class="gemini-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
+              <span class="gemini-result-filepath">${escapeHtml(item.filePath)}</span>
             </div>
-            <span class="feature-result-relevance">${escapeHtml(item.relevance || "Related")}</span>
+            <span class="gemini-result-meta">${escapeHtml(item.relevance || "Related")}</span>
           </div>
-          <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
-          <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
+          <div class="gemini-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+          <div class="gemini-result-code">${escapeHtml(featureResultPreview(item))}</div>
         </div>
       `)
       .join("");
     appendFeatureChatBubble("assistant", `
-      <strong>Code preview</strong>
-      <div class="feature-results-grid">${previewCards}</div>
+      <div style="margin-bottom:8px;"><strong>Code preview</strong></div>
+      ${previewCards}
     `);
     return;
   }
@@ -866,53 +863,62 @@ function renderAgenticSearchResults(report, mode = "results") {
   const filesCount = report.groupedResults.reduce((sum, g) => sum + g.items.length, 0);
   const cardsHtml = report.groupedResults
     .map((group) => `
-      <div class="feature-result-card">
-        <div class="feature-result-head">
-          <div class="feature-result-title">
-            <strong>${escapeHtml(group.label)}</strong>
-            <span class="feature-result-meta">${group.items.length} matched file${group.items.length === 1 ? "" : "s"}</span>
+      <div class="gemini-result-card">
+        <div class="gemini-result-head">
+          <div class="gemini-result-title-group">
+            <strong class="gemini-result-filename">${escapeHtml(group.label)}</strong>
+            <span class="gemini-result-meta">${group.items.length} matched file${group.items.length === 1 ? "" : "s"}</span>
           </div>
         </div>
-        <div class="feature-results-grid">
-          ${group.items.slice(0, 4).map((item) => `
-            <div class="feature-result-card">
-              <div class="feature-result-head">
-                <div class="feature-result-title">
-                  <strong>${escapeHtml(item.filePath.split("/").pop())}</strong>
-                  <span class="feature-result-path">${escapeHtml(item.filePath)}</span>
-                </div>
-                <span class="feature-result-relevance">${escapeHtml(item.relevance || "Related")}</span>
+        ${group.items.slice(0, 4).map((item) => `
+          <div class="gemini-result-card">
+            <div class="gemini-result-head">
+              <div class="gemini-result-title-group">
+                <strong class="gemini-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
+                <span class="gemini-result-filepath">${escapeHtml(item.filePath)}</span>
               </div>
-              <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
-              <div class="feature-result-meta">Section: ${escapeHtml(item.sectionNames?.[0] || "Related section")}</div>
-              <div class="feature-result-reason">${escapeHtml(item.reason || "Matched feature-related logic.")}</div>
-              <div class="feature-result-meta">Dependencies: ${escapeHtml((item.dependencies || []).slice(0, 4).join(", ") || "None")}</div>
-              <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
-              <div class="feature-result-actions">
-                <button class="feature-action-mini" type="button" data-open-feature-file="${escapeHtml(item.filePath)}">Open File</button>
-                <button class="feature-action-mini" type="button" data-preview-feature-file="${escapeHtml(item.filePath)}">Preview Code</button>
-                <button class="feature-action-mini" type="button" data-connections-feature-file="${escapeHtml(item.filePath)}">Show Connections</button>
-                <button class="feature-action-mini feature-explain-button" type="button" data-explain-feature-file="${escapeHtml(item.filePath)}" title="Explain Simply" aria-label="Explain Simply">
-                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 4.1 3 5.2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.8A6 6 0 0 0 18 9a6 6 0 0 0-6-6Z"></path><path d="M10 21h4"></path></svg>
-                </button>
-              </div>
+              <span class="gemini-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</span>
             </div>
-          `).join("")}
-        </div>
+            <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">Section: ${escapeHtml(item.sectionNames?.[0] || "Related section")}</div>
+            <div style="font-size:0.78rem;color:rgba(255,255,255,0.55);">${escapeHtml(item.reason || "Matched feature-related logic.")}</div>
+            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);">Dependencies: ${escapeHtml((item.dependencies || []).slice(0, 4).join(", ") || "None")}</div>
+            <div class="gemini-result-code">${escapeHtml(featureResultPreview(item))}</div>
+            <div class="gemini-result-actions">
+              <button class="gemini-action-btn" type="button" data-open-feature-file="${escapeHtml(item.filePath)}">Open File</button>
+              <button class="gemini-action-btn" type="button" data-preview-feature-file="${escapeHtml(item.filePath)}">Preview Code</button>
+              <button class="gemini-action-btn" type="button" data-connections-feature-file="${escapeHtml(item.filePath)}">Show Connections</button>
+              <button class="gemini-explain-btn" type="button" data-explain-feature-file="${escapeHtml(item.filePath)}" title="Explain Simply" aria-label="Explain Simply">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 4.1 3 5.2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.8A6 6 0 0 0 18 9a6 6 0 0 0-6-6Z"></path><path d="M10 21h4"></path></svg>
+              </button>
+            </div>
+          </div>
+        `).join("")}
       </div>
     `)
     .join("");
 
   appendFeatureChatBubble("assistant", `
-    <div style="margin-bottom: 8px;"><strong>Found ${filesCount} related files</strong></div>
-    <div class="feature-summary-grid">
-      <div class="feature-summary-stat"><span>Files searched</span><strong>${report.summary?.filesSearched ?? filesCount}</strong></div>
-      <div class="feature-summary-stat"><span>Related files</span><strong>${report.summary?.relatedFilesFound || filesCount}</strong></div>
-      <div class="feature-summary-stat"><span>Code sections</span><strong>${report.summary?.relatedCodeSections || 0}</strong></div>
-      <div class="feature-summary-stat"><span>Dependencies</span><strong>${report.summary?.dependenciesFound || 0}</strong></div>
+    <div style="margin-bottom: 10px;"><strong>Found ${filesCount} related files</strong></div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
+        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Files searched</span>
+        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.filesSearched ?? filesCount}</strong>
+      </div>
+      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
+        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Related files</span>
+        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.relatedFilesFound || filesCount}</strong>
+      </div>
+      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
+        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Code sections</span>
+        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.relatedCodeSections || 0}</strong>
+      </div>
+      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
+        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Dependencies</span>
+        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.dependenciesFound || 0}</strong>
+      </div>
     </div>
-    <div class="feature-result-meta" style="margin-top: 12px;">Search time: ${((report.elapsedMs || 0) / 1000).toFixed(1)} seconds. Searching in ${escapeHtml(describeFeatureSearchScope())}.</div>
-    <div class="feature-results-grid">${cardsHtml}</div>
+    <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:12px;">Search time: ${((report.elapsedMs || 0) / 1000).toFixed(1)} seconds. Searching in ${escapeHtml(describeFeatureSearchScope())}.</div>
+    ${cardsHtml}
   `);
   
   const finalActions = document.getElementById("featureFinalActions");
@@ -2104,6 +2110,11 @@ async function previewFeatureConvert() {
   featureSearchInput.value = "";
   autoResizeFeatureSearchInput();
   renderFeatureSuggestions(state.recentFeatureSearches);
+  // Show the new suggestion chips by default
+  const suggestionRow = document.querySelector('.gemini-suggestions');
+  if (suggestionRow) {
+    suggestionRow.classList.remove('hidden');
+  }
   startAgentSearchPolling();
 }
 
