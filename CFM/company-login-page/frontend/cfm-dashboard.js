@@ -67,6 +67,9 @@ const state = {
   recentFeatureSearches: JSON.parse(localStorage.getItem("ddoCfmRecentFeatureSearches") || "[]"),
   featureSearchTargets: [],
   recentWorkspaceLocations: [],
+  featureConversationHistory: [],
+  activeFeatureSidebarItem: "project-current",
+  convertSidebarCollapsed: false,
 };
 
 const allowedExtensions = [
@@ -172,6 +175,9 @@ const featureVoiceSearchButton = document.getElementById("featureVoiceSearchButt
 const featureHistoryPanel = document.getElementById("featureHistoryPanel");
 const featureFileHistoryList = document.getElementById("featureFileHistoryList");
 const featureChatHistoryList = document.getElementById("featureChatHistoryList");
+const featureSidebarChatList = document.getElementById("featureSidebarChatList");
+const featureSidebarProjectList = document.getElementById("featureSidebarProjectList");
+const featureSidebarFileList = document.getElementById("featureSidebarFileList");
 let bannerTimerId = 0;
 let agentSearchPollTimer = 0;
 let featureSuggestionTimer = 0;
@@ -435,6 +441,7 @@ function openFileInfoPopup() {
 
 function closeFeatureConvertPopup() {
   featureConvertPopup.classList.add("hidden");
+  featureConvertPopup.classList.remove("cfm-convert-sidebar-open");
   stopAgentSearchPolling();
   closeFeatureOptionsMenu();
   featureHistoryPanel?.classList.add("hidden");
@@ -473,6 +480,144 @@ function bindConvertElementEvent(id, eventName, handler) {
   }
   element.addEventListener(eventName, handler);
   return element;
+}
+
+function setFeatureSidebarActive(activeId) {
+  state.activeFeatureSidebarItem = activeId || state.activeFeatureSidebarItem;
+  renderFeatureSidebar();
+}
+
+function renderFeatureSidebar() {
+  featureConvertPopup?.classList.toggle("cfm-convert-sidebar-collapsed", state.convertSidebarCollapsed);
+
+  const projects = [
+    { id: "project-current", name: state.workspaceLabel || "DDO webpage", meta: "Current workspace", path: "" },
+    { id: "project-ddo", name: "DDO", meta: "Project", path: "DDO" },
+    { id: "project-ddo-webpage", name: "DDO webpage", meta: "Project", path: "" },
+    { id: "project-jarvis", name: "JARVIS", meta: "Project", path: "JARVIS" },
+  ];
+
+  if (featureSidebarProjectList) {
+    featureSidebarProjectList.innerHTML = projects.map((project) => `
+      <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === project.id ? " active" : ""}" type="button" data-feature-sidebar-project="${escapeHtml(project.id)}" data-feature-sidebar-project-path="${escapeHtml(project.path)}">
+        <span class="cfm-convert-sidebar-main">${escapeHtml(project.name)}</span>
+        <span class="cfm-convert-sidebar-sub">${escapeHtml(project.meta)}</span>
+      </button>
+    `).join("");
+
+    featureSidebarProjectList.querySelectorAll("[data-feature-sidebar-project]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.featureSearchTargets = [{
+          path: button.dataset.featureSidebarProjectPath || "",
+          scopeType: "folder",
+        }];
+        updateFeatureSelectedTargetDisplay();
+        renderFeatureTargetList();
+        setFeatureSidebarActive(button.dataset.featureSidebarProject || "project-current");
+        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+      });
+    });
+  }
+
+  if (featureSidebarFileList) {
+    const files = (state.recentWorkspaceLocations || []).slice(0, 8);
+    featureSidebarFileList.innerHTML = files.length
+      ? files.map((file, index) => `
+        <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === `file-${index}` ? " active" : ""}" type="button" data-feature-sidebar-file="${index}" data-feature-sidebar-file-path="${escapeHtml(file.targetPath || "")}" data-feature-sidebar-file-type="${escapeHtml(file.itemType === "folder" ? "folder" : "file")}">
+          <span class="cfm-convert-sidebar-main">${escapeHtml(featureTargetName({ path: file.targetPath || "" }))}</span>
+          <span class="cfm-convert-sidebar-sub">${escapeHtml(file.targetPath || state.workspaceLabel || "Current project")}</span>
+        </button>
+      `).join("")
+      : '<div class="cfm-convert-sidebar-empty">No recent files yet.</div>';
+
+    featureSidebarFileList.querySelectorAll("[data-feature-sidebar-file]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.featureSearchTargets = [{
+          path: button.dataset.featureSidebarFilePath || "",
+          scopeType: button.dataset.featureSidebarFileType === "folder" ? "folder" : "file",
+        }];
+        updateFeatureSelectedTargetDisplay();
+        renderFeatureTargetList();
+        setFeatureSidebarActive(`file-${button.dataset.featureSidebarFile}`);
+        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+      });
+    });
+  }
+
+  if (featureSidebarChatList) {
+    const conversationItems = state.featureConversationHistory.slice(0, 8);
+    const fallbackItems = state.recentFeatureSearches
+      .filter((query) => !conversationItems.some((item) => item.query === query))
+      .slice(0, Math.max(0, 8 - conversationItems.length))
+      .map((query, index) => ({ id: `recent-${index}`, query, targets: [], report: null }));
+    const chats = [...conversationItems, ...fallbackItems];
+
+    featureSidebarChatList.innerHTML = chats.length
+      ? chats.map((chat) => `
+        <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === `chat-${chat.id}` ? " active" : ""}" type="button" data-feature-sidebar-chat="${escapeHtml(chat.id)}">
+          <span class="cfm-convert-sidebar-main">${escapeHtml(chat.query)}</span>
+          <span class="cfm-convert-sidebar-sub">${chat.report ? "Saved Extract result" : "Previous Extract search"}</span>
+        </button>
+      `).join("")
+      : '<div class="cfm-convert-sidebar-empty">No Extract chats yet.</div>';
+
+    featureSidebarChatList.querySelectorAll("[data-feature-sidebar-chat]").forEach((button) => {
+      button.addEventListener("click", () => {
+        restoreFeatureConversation(button.dataset.featureSidebarChat || "");
+        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+      });
+    });
+  }
+}
+
+function saveFeatureConversation(query, report = null) {
+  if (!query) {
+    return;
+  }
+  const id = `conversation-${Date.now()}`;
+  const nextItem = {
+    id,
+    query,
+    report,
+    targets: state.featureSearchTargets.map((target) => ({ ...target })),
+  };
+  state.featureConversationHistory = [
+    nextItem,
+    ...state.featureConversationHistory.filter((item) => item.query !== query),
+  ].slice(0, 12);
+  state.activeFeatureSidebarItem = `chat-${id}`;
+  renderFeatureSidebar();
+}
+
+function restoreFeatureConversation(conversationId) {
+  const conversation = state.featureConversationHistory.find((item) => item.id === conversationId);
+  const query = conversation?.query || state.recentFeatureSearches.find((item, index) => `recent-${index}` === conversationId) || "";
+  if (!query) {
+    return;
+  }
+
+  state.featureSearchTargets = (conversation?.targets || []).map((target) => ({ ...target }));
+  updateFeatureSelectedTargetDisplay();
+  renderFeatureTargetList();
+  setFeatureChatEmptyState();
+  featureSearchInput.value = query;
+  autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
+  appendFeatureChatBubble("user", `
+    ${escapeHtml(query)}
+    <div class="cfm-convert-result-meta" style="margin-top:6px;">Restored Extract chat</div>
+  `);
+
+  if (conversation?.report) {
+    state.agentSearchReport = conversation.report;
+    ensureSelectedFeaturePaths(conversation.report);
+    renderAgenticSearchResults(conversation.report, "results");
+  } else {
+    appendFeatureChatBubble("assistant", "This previous Extract search is ready to run again.");
+    document.getElementById("featureFinalActions")?.classList.add("hidden");
+  }
+
+  setFeatureSidebarActive(`chat-${conversationId}`);
 }
 
 function renderFeatureHistoryPanel() {
@@ -605,6 +750,7 @@ function openFeatureConvertPopup() {
   loadRecentWorkspaceLocations().catch(() => undefined);
   setFeatureChatEmptyState();
   renderFeatureHistoryPanel();
+  renderFeatureSidebar();
 
   const finalActions = document.getElementById("featureFinalActions");
   if (finalActions) finalActions.classList.add("hidden");
@@ -702,6 +848,7 @@ async function loadRecentWorkspaceLocations() {
     headers: authHeaders(),
   });
   state.recentWorkspaceLocations = result.recentFiles || [];
+  renderFeatureSidebar();
 }
 
 function formatFeatureTargetLabel(target) {
@@ -2321,6 +2468,7 @@ async function pollAgentSearchStatus() {
     stopAgentSearchPolling();
     state.featureConvertPreview = result.preview || null;
     renderAgenticSearchResults(result, "results");
+    saveFeatureConversation(result.featureName || state.recentFeatureSearches[0] || "", result);
   }
 
   if (result.status === "failed") {
@@ -3123,6 +3271,35 @@ bindConvertElementEvent("clearFeatureSearchButton", "click", () => {
 bindConvertElementEvent("featureOptionsButton", "click", () => {
   toggleFeatureOptionsMenu();
 });
+bindConvertElementEvent("featureSidebarToggleButton", "click", () => {
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    featureConvertPopup?.classList.toggle("cfm-convert-sidebar-open");
+    return;
+  }
+  state.convertSidebarCollapsed = !state.convertSidebarCollapsed;
+  renderFeatureSidebar();
+});
+bindConvertElementEvent("featureNewConversationButton", "click", () => {
+  state.agentSearchReport = null;
+  state.featureConvertPreview = null;
+  state.selectedFeaturePaths = new Set();
+  document.getElementById("featureFinalActions")?.classList.add("hidden");
+  featureSearchInput.value = "";
+  setFeatureChatEmptyState();
+  autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
+  setFeatureSidebarActive("new-conversation");
+  featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+  featureSearchInput.focus();
+});
+bindConvertElementEvent("featureSidebarSeeAllChatsButton", "click", toggleFeatureHistoryPanel);
+bindConvertElementEvent("featureSidebarSeeAllFilesButton", "click", toggleFeatureHistoryPanel);
+bindConvertElementEvent("featureSidebarSettingsButton", "click", () => {
+  featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+  closeFeatureOptionsMenu();
+  featureHistoryPanel?.classList.add("hidden");
+  settingsButton?.click();
+});
 bindConvertElementEvent("featureVoiceSearchButton", "click", async () => {
   if (voiceRecognition) {
     stopVoiceSearch();
@@ -3421,6 +3598,13 @@ window.addEventListener("click", (event) => {
   if (!event.target.closest("#featureHistoryPanel") && !event.target.closest("#featureRecentLocationsButton")) {
     featureHistoryPanel?.classList.add("hidden");
   }
+  if (
+    featureConvertPopup?.classList.contains("cfm-convert-sidebar-open")
+    && !event.target.closest("#featureConvertSidebar")
+    && !event.target.closest("#featureSidebarToggleButton")
+  ) {
+    featureConvertPopup.classList.remove("cfm-convert-sidebar-open");
+  }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");
   }
@@ -3441,6 +3625,10 @@ window.addEventListener("keydown", async (event) => {
   }
   if (event.key === "Escape" && !featureConvertPopup.classList.contains("hidden")) {
     event.preventDefault();
+    if (featureConvertPopup.classList.contains("cfm-convert-sidebar-open")) {
+      featureConvertPopup.classList.remove("cfm-convert-sidebar-open");
+      return;
+    }
     if (state.agentSearchStatus === "running" || state.agentSearchStatus === "stopping") {
       await stopFeatureSearch();
     } else {

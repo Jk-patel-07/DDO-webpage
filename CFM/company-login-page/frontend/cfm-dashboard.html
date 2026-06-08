@@ -347,6 +347,38 @@
         </button>
       </div>
       <div class="cfm-convert-body">
+        <aside class="cfm-convert-sidebar" id="featureConvertSidebar" aria-label="Extract sidebar">
+          <div class="cfm-convert-sidebar-top">
+            <button class="cfm-convert-sidebar-toggle" id="featureSidebarToggleButton" type="button" aria-label="Collapse Extract sidebar" title="Collapse sidebar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
+            </button>
+            <button class="cfm-convert-sidebar-new" id="featureNewConversationButton" type="button">
+              <span class="cfm-convert-sidebar-icon">+</span>
+              <span class="cfm-convert-sidebar-label">New Conversation</span>
+            </button>
+          </div>
+          <div class="cfm-convert-sidebar-scroll">
+            <div class="cfm-convert-sidebar-section">
+              <div class="cfm-convert-sidebar-heading">Conversation History</div>
+              <div class="cfm-convert-sidebar-list" id="featureSidebarChatList"></div>
+              <button class="cfm-convert-sidebar-see-all" id="featureSidebarSeeAllChatsButton" type="button">See all</button>
+            </div>
+            <div class="cfm-convert-sidebar-section">
+              <div class="cfm-convert-sidebar-heading">Projects</div>
+              <div class="cfm-convert-sidebar-list" id="featureSidebarProjectList"></div>
+            </div>
+            <div class="cfm-convert-sidebar-section">
+              <div class="cfm-convert-sidebar-heading">Recent Files</div>
+              <div class="cfm-convert-sidebar-list" id="featureSidebarFileList"></div>
+              <button class="cfm-convert-sidebar-see-all" id="featureSidebarSeeAllFilesButton" type="button">See all</button>
+            </div>
+          </div>
+          <button class="cfm-convert-sidebar-settings" id="featureSidebarSettingsButton" type="button">
+            <span class="cfm-convert-sidebar-icon">••</span>
+            <span class="cfm-convert-sidebar-label">Settings</span>
+          </button>
+        </aside>
+
         <div class="cfm-convert-target-list-wrap hidden" id="featureTargetSelection">
           <div class="cfm-convert-target-list" id="featureTargetList"></div>
         </div>

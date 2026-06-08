@@ -5022,3 +5022,286 @@ body[data-theme="light"] .verify-password-btn:hover {
     max-height: min(520px, calc(100vh - 164px));
   }
 }
+
+/* Extract popup-only left sidebar. */
+.cfm-convert-body {
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr);
+  gap: 20px;
+}
+
+.cfm-convert-sidebar {
+  grid-column: 1;
+  min-height: 0;
+  height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 55, 0.92);
+  border-radius: 26px;
+  background: rgba(2, 3, 7, 0.88);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  transition: width 0.18s ease, transform 0.22s ease, opacity 0.18s ease;
+}
+
+.cfm-convert-chat-panel {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.cfm-convert-composer-section,
+.cfm-convert-summary-actions {
+  width: min(900px, 100%);
+}
+
+.cfm-convert-sidebar-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cfm-convert-sidebar-toggle,
+.cfm-convert-sidebar-new,
+.cfm-convert-sidebar-settings,
+.cfm-convert-sidebar-item,
+.cfm-convert-sidebar-see-all {
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(241, 245, 249, 0.9);
+  cursor: pointer;
+  font: inherit;
+}
+
+.cfm-convert-sidebar-toggle {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: rgba(203, 213, 225, 0.74);
+}
+
+.cfm-convert-sidebar-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cfm-convert-sidebar-new,
+.cfm-convert-sidebar-settings {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 14px;
+  padding: 0 10px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.cfm-convert-sidebar-new {
+  flex: 1;
+}
+
+.cfm-convert-sidebar-icon {
+  width: 20px;
+  min-width: 20px;
+  text-align: center;
+  color: rgba(147, 197, 253, 0.95);
+}
+
+.cfm-convert-sidebar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.cfm-convert-sidebar-scroll {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #111 #020202;
+}
+
+.cfm-convert-sidebar-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.cfm-convert-sidebar-scroll::-webkit-scrollbar-track {
+  background: #020202;
+}
+
+.cfm-convert-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #111;
+  border: 2px solid #020202;
+  border-radius: 999px;
+}
+
+.cfm-convert-sidebar-section {
+  display: grid;
+  gap: 8px;
+}
+
+.cfm-convert-sidebar-heading {
+  padding: 0 8px;
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cfm-convert-sidebar-list {
+  display: grid;
+  gap: 4px;
+}
+
+.cfm-convert-sidebar-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.cfm-convert-sidebar-item:hover,
+.cfm-convert-sidebar-toggle:hover,
+.cfm-convert-sidebar-new:hover,
+.cfm-convert-sidebar-settings:hover,
+.cfm-convert-sidebar-see-all:hover {
+  border-color: rgba(71, 85, 105, 0.58);
+  background: rgba(15, 23, 42, 0.88);
+}
+
+.cfm-convert-sidebar-item.active {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(30, 41, 59, 0.9);
+}
+
+.cfm-convert-sidebar-main,
+.cfm-convert-sidebar-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfm-convert-sidebar-main {
+  color: rgba(248, 250, 252, 0.95);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.cfm-convert-sidebar-sub,
+.cfm-convert-sidebar-empty {
+  color: rgba(148, 163, 184, 0.74);
+  font-size: 0.72rem;
+}
+
+.cfm-convert-sidebar-empty {
+  padding: 9px 10px;
+}
+
+.cfm-convert-sidebar-see-all {
+  justify-self: start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: rgba(191, 219, 254, 0.86);
+  font-size: 0.72rem;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-body {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar {
+  padding: 10px;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-label,
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-heading,
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-sub,
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-see-all {
+  display: none;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-top,
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-new,
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-settings {
+  justify-content: center;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-item {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-main {
+  max-width: 24px;
+  text-align: center;
+}
+
+.cfm-convert-sidebar-collapsed .cfm-convert-sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 760px) {
+  .cfm-convert-body {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .cfm-convert-sidebar {
+    position: absolute;
+    left: 12px;
+    top: 0;
+    bottom: 112px;
+    z-index: 24;
+    width: 54px;
+    height: auto;
+    padding: 8px;
+    border-radius: 22px;
+  }
+
+  .cfm-convert-sidebar-open .cfm-convert-sidebar {
+    width: min(286px, calc(100vw - 24px));
+    box-shadow:
+      0 24px 62px rgba(0, 0, 0, 0.58),
+      0 0 60px rgba(30, 64, 175, 0.16);
+  }
+
+  .cfm-convert-popup:not(.cfm-convert-sidebar-open) .cfm-convert-sidebar .cfm-convert-sidebar-label,
+  .cfm-convert-popup:not(.cfm-convert-sidebar-open) .cfm-convert-sidebar .cfm-convert-sidebar-heading,
+  .cfm-convert-popup:not(.cfm-convert-sidebar-open) .cfm-convert-sidebar .cfm-convert-sidebar-sub,
+  .cfm-convert-popup:not(.cfm-convert-sidebar-open) .cfm-convert-sidebar .cfm-convert-sidebar-see-all {
+    display: none;
+  }
+
+  .cfm-convert-sidebar-open .cfm-convert-sidebar-label,
+  .cfm-convert-sidebar-open .cfm-convert-sidebar-heading,
+  .cfm-convert-sidebar-open .cfm-convert-sidebar-sub,
+  .cfm-convert-sidebar-open .cfm-convert-sidebar-see-all {
+    display: initial;
+  }
+
+  .cfm-convert-chat-panel {
+    grid-column: 2;
+  }
+
+  .cfm-convert-summary-actions,
+  .cfm-convert-composer-section {
+    width: min(900px, 100%);
+  }
+}
