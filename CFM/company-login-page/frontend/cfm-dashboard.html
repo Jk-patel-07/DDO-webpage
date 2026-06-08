@@ -330,154 +330,108 @@
       </div>
     </aside>
 
-    <aside class="history-popup gemini-convert-popup hidden" id="featureConvertPopup">
-      <div class="gemini-convert-head">
-        <div>
-          <p class="panel-label">CONVERT</p>
-          <h4>Extract Feature Folder</h4>
+    <aside class="history-popup cfm-convert-popup hidden" id="featureConvertPopup">
+      <div class="cfm-convert-head">
+        <button class="cfm-convert-close-button" id="closeFeatureConvertPopupButton" type="button" aria-label="Close convert popup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+        </button>
+        <div class="cfm-convert-title-group">
+          <button class="cfm-convert-title-button" id="featureAddTargetButton" type="button" aria-label="Select search target" title="Select search target">
+            <span>Extract Feature Folder</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <span class="cfm-convert-target-name" id="featureSelectedTargetText">Current Project</span>
         </div>
-        <button class="gemini-close-button" id="closeFeatureConvertPopupButton" type="button" aria-label="Close convert popup">&times;</button>
+        <button class="cfm-convert-target-history-button" id="featureRecentLocationsButton" type="button" aria-label="Use recent locations" title="Use recent locations">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 3"></path><path d="M3.05 11a9 9 0 1 1 2.64 7.36"></path><path d="M3 16v-5h5"></path></svg>
+        </button>
       </div>
-      <div class="gemini-convert-body">
-        <!-- Search Target Section -->
-        <div class="gemini-target-card" id="featureSelectedTargetDisplay">
-          <svg class="gemini-target-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
-          <div class="gemini-target-info">
-            <span class="gemini-target-label">Search Target</span>
-            <span class="gemini-target-name" id="featureSelectedTargetText">Current Project</span>
-          </div>
-          <button class="gemini-target-history-btn" id="featureRecentLocationsButton" type="button" aria-label="Show recent locations" title="Recent locations">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
-          </button>
+      <div class="cfm-convert-body">
+        <div class="cfm-convert-target-list-wrap hidden" id="featureTargetSelection">
+          <div class="cfm-convert-target-list" id="featureTargetList"></div>
         </div>
 
-        <!-- Add target button -->
-        <div class="gemini-add-target-row">
-          <button class="gemini-add-target-btn hidden" id="featureAddTargetButton" type="button" aria-label="Select more files or folders" title="Select more files or folders">+</button>
-        </div>
+        <div class="cfm-convert-chat-panel">
+          <div class="cfm-convert-chat-section">
+            <div class="cfm-convert-chat-area" id="featureChatArea">
+              <div class="cfm-convert-empty-state">
+                <svg class="cfm-convert-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <p class="cfm-convert-empty-heading">What would you like to extract?</p>
+                <p class="cfm-convert-empty-sub">Search and extract a feature from the selected project</p>
+              </div>
+            </div>
 
-        <!-- Hidden target list (populated by JS) -->
-        <div class="feature-target-selection hidden" id="featureTargetSelection">
-          <div class="feature-target-list" id="featureTargetList"></div>
-        </div>
+            <div class="cfm-convert-thinking-indicator hidden" id="featureThinkingIndicator">
+              <div class="cfm-convert-thinking-bubble">
+                <svg class="cfm-convert-thinking-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                <span id="featureThinkingText">Searching selected files...</span>
+                <div class="cfm-convert-thinking-dots"><span></span><span></span><span></span></div>
+              </div>
+            </div>
 
-        <!-- Main AI Area / Chat Messages -->
-        <div class="gemini-chat-area" id="featureChatArea">
-          <!-- Empty State (default) -->
-          <div class="empty-state">
-            <svg class="gemini-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-            <p class="gemini-empty-heading">What would you like to extract?</p>
-            <p class="gemini-empty-sub">Type a feature name or natural language query below.</p>
-          </div>
-        </div>
+            <div class="cfm-convert-error hidden" id="featureConvertError"></div>
+            <div class="cfm-convert-preview-shell hidden" id="featureConvertPreviewBody"></div>
 
-        <!-- Thinking Indicator -->
-        <div class="gemini-thinking-indicator hidden" id="featureThinkingIndicator">
-          <div class="gemini-thinking-bubble">
-            <svg class="ai-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-            <span id="featureThinkingText">Searching selected files...</span>
-            <div class="thinking-dots"><span></span><span></span><span></span></div>
-          </div>
-        </div>
-
-        <!-- Error message -->
-        <div class="gemini-error hidden" id="featureConvertError"></div>
-
-        <!-- Gemini-style Input Box -->
-        <div class="gemini-input-wrapper">
-          <!-- Suggestion chips -->
-          <div class="gemini-suggestion-row gemini-suggestions hidden" id="featureSuggestions">
-            <button class="gemini-suggestion-chip" data-suggestion="alms maths">alms maths</button>
-            <button class="gemini-suggestion-chip" data-suggestion="hello">hello</button>
-            <button class="gemini-suggestion-chip" data-suggestion="what is code say">what is code say</button>
-            <button class="gemini-suggestion-chip" data-suggestion="html">html</button>
+            <div class="cfm-convert-summary-actions hidden" id="featureFinalActions">
+              <button class="cfm-convert-action-button" id="showFeatureConnectionsButton" type="button">Show Connections</button>
+              <button class="cfm-convert-action-button" id="previewSelectedFeatureCodeButton" type="button">Preview Code</button>
+              <button class="cfm-convert-action-button" id="openSelectedFeatureFileButton" type="button">Open File</button>
+              <button class="cfm-convert-primary-button" id="applyFeatureConvertButton" type="button">Create Feature Folder</button>
+            </div>
           </div>
 
-          <div class="gemini-input-row">
-            <button class="gemini-plus-btn" id="featureOptionsButton" type="button" aria-label="Open search options" title="Options">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <div class="cfm-convert-composer-section">
+            <div class="cfm-convert-suggestions hidden" id="featureSuggestions"></div>
+
+            <div class="cfm-convert-input-wrap">
+              <div class="cfm-convert-input-row">
+                <button class="cfm-convert-plus-button" id="featureOptionsButton" type="button" aria-label="Open convert options" title="Options">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+                <textarea class="cfm-convert-textarea" id="featureSearchInput" rows="1" placeholder="Ask about a feature, folder, component, or code..."></textarea>
+                <button class="cfm-convert-icon-button" id="featureVoiceSearchButton" type="button" aria-label="Voice search" title="Voice search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+                </button>
+                <button class="cfm-convert-icon-button" id="clearFeatureSearchButton" type="button" aria-label="Clear input" title="Clear input">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                </button>
+                <button class="cfm-convert-send-button hidden" id="stopFeatureSearchButton" type="button" aria-label="Stop search" title="Stop search">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+                </button>
+                <button class="cfm-convert-send-button" id="runFeaturePreviewButton" type="button" aria-label="Search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="cfm-convert-footer-actions hidden" aria-hidden="true">
+              <button class="cfm-convert-footer-button" id="cancelFeatureConvertButton" type="button">Cancel</button>
+              <button class="cfm-convert-footer-button" id="undoFeatureConvertButton" type="button">Undo</button>
+            </div>
+          </div>
+
+          <div class="cfm-convert-options-menu hidden" id="featureOptionsMenu" role="menu" aria-label="Convert target options">
+            <button class="cfm-convert-option-item" id="featureSelectFolderButton" type="button" title="Add a folder to the search target">
+              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg></span>
+              <span>Add Folder</span>
             </button>
-            <textarea class="gemini-textarea" id="featureSearchInput" rows="1" placeholder="Ask naturally, for example: battery-related code, login popup backend file, CFM white"></textarea>
-            <button class="gemini-mic-btn" id="featureVoiceSearchButton" type="button" aria-label="Voice search" title="Voice search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+            <button class="cfm-convert-option-item" id="featureSelectFilesButton" type="button" title="Add a file to the search target">
+              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6H7a2 2 0 0 0-2 2Z"></path></svg></span>
+              <span>Add Files</span>
             </button>
-            <button class="gemini-send-btn hidden gemini-stop-btn" id="stopFeatureSearchButton" type="button" aria-label="Stop search" title="Stop search">
-              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+            <button class="cfm-convert-option-item" id="featureJoinCurrentTargetButton" type="button" title="Add the current open file or folder to the selected target">
+              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12h8"></path><path d="M12 8v8"></path><path d="M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"></path></svg></span>
+              <span>Join Current Target</span>
             </button>
-            <button class="gemini-send-btn" id="runFeaturePreviewButton" type="button" aria-label="Search" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <button class="cfm-convert-option-item" id="featureUndoMenuButton" type="button" title="Undo the last conversion">
+              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M20 20a8 8 0 0 0-8-8H4"></path></svg></span>
+              <span>Undo</span>
+            </button>
+            <button class="cfm-convert-option-item" id="cancelFeatureConvertButtonMenu" type="button" title="Close convert search">
+              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
+              <span>Cancel</span>
             </button>
           </div>
-          <div class="gemini-input-hint">
-            <span>Enter to search</span>
-            <span>Shift + Enter for a new line</span>
-            <span>Ctrl + K opens this search</span>
-          </div>
-        </div>
-
-        <!-- Options Menu -->
-        <div class="gemini-options-menu hidden" id="featureOptionsMenu" role="menu" aria-label="Feature search options">
-          <button class="gemini-option-item" id="featureSelectFolderButton" type="button" title="Choose a folder to search">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg></span>
-            <span>Select Folder</span>
-          </button>
-          <button class="gemini-option-item" id="featureSelectFilesButton" type="button" title="Choose one or more files to search">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6H7a2 2 0 0 0-2 2Z"></path></svg></span>
-            <span>Select Files</span>
-          </button>
-          <button class="gemini-option-item" id="featureUseCurrentProjectButton" type="button" title="Search the current project">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 9-4 9 4-9 4-9-4Z"></path><path d="m3 6 9 4 9-4"></path><path d="m3 12 9 4 9-4"></path><path d="m3 18 9 4 9-4"></path></svg></span>
-            <span>Use Current Project</span>
-          </button>
-          <button class="gemini-option-item" id="featureOpenRecentLocationsButton" type="button" title="Use a recent location">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg></span>
-            <span>Recent Locations</span>
-          </button>
-          <button class="gemini-option-item" id="featurePreviewCodeMenuButton" type="button" title="Preview matched code">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg></span>
-            <span>Preview Code</span>
-          </button>
-          <button class="gemini-option-item" id="featureOpenFileMenuButton" type="button" title="Open the first matched file">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"></path></svg></span>
-            <span>Open File</span>
-          </button>
-          <button class="gemini-option-item" id="featureShowConnectionsMenuButton" type="button" title="Show file connections">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07L11 5"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07L13 19"></path></svg></span>
-            <span>Show Connections</span>
-          </button>
-          <button class="gemini-option-item" id="featureCreateFolderMenuButton" type="button" title="Create the feature folder">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg></span>
-            <span>Create Feature Folder</span>
-          </button>
-          <button class="gemini-option-item" id="featureUndoMenuButton" type="button" title="Undo the last conversion">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M20 20a8 8 0 0 0-8-8H4"></path></svg></span>
-            <span>Undo</span>
-          </button>
-          <button class="gemini-option-item" id="featureCancelSearchMenuButton" type="button" title="Close the popup">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span>
-            <span>Cancel Search</span>
-          </button>
-          <button class="gemini-option-item" id="featureStopSearchMenuButton" type="button" title="Stop the active search">
-            <span class="gemini-option-icon"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg></span>
-            <span>Stop Search</span>
-          </button>
-        </div>
-
-        <!-- Preview / Results -->
-        <div class="gemini-preview-shell hidden" id="featureConvertPreviewBody"></div>
-
-        <!-- Summary actions -->
-        <div class="gemini-summary-actions hidden" id="featureFinalActions">
-          <button class="gemini-action-btn" id="showFeatureConnectionsButton" type="button">Show Connections</button>
-          <button class="gemini-action-btn" id="previewSelectedFeatureCodeButton" type="button">Preview Code</button>
-          <button class="gemini-action-btn" id="openSelectedFeatureFileButton" type="button">Open File</button>
-          <button class="gemini-primary-btn" id="applyFeatureConvertButton" type="button">Create Feature Folder</button>
-        </div>
-
-        <!-- Bottom Controls -->
-        <div class="gemini-bottom-actions">
-          <button class="gemini-bottom-btn" id="cancelFeatureConvertButton" type="button">Cancel</button>
-          <button class="gemini-bottom-btn" id="undoFeatureConvertButton" type="button">Undo</button>
         </div>
       </div>
     </aside>

@@ -168,7 +168,6 @@ const featureChatArea = document.getElementById("featureChatArea");
 const featureSelectedTargetText = document.getElementById("featureSelectedTargetText");
 const featureAddTargetButton = document.getElementById("featureAddTargetButton");
 const featureOptionsMenu = document.getElementById("featureOptionsMenu");
-const featureOptionsButton = document.getElementById("featureOptionsButton");
 const featureVoiceSearchButton = document.getElementById("featureVoiceSearchButton");
 const stopFeatureSearchButton = document.getElementById("stopFeatureSearchButton");
 let bannerTimerId = 0;
@@ -463,15 +462,24 @@ function toggleFeatureOptionsMenu() {
   featureOptionsMenu?.classList.toggle("hidden");
 }
 
+function bindConvertElementEvent(id, eventName, handler) {
+  const element = document.getElementById(id);
+  if (!element) {
+    return null;
+  }
+  element.addEventListener(eventName, handler);
+  return element;
+}
+
 function setFeatureChatEmptyState() {
   if (!featureChatArea) {
     return;
   }
   featureChatArea.innerHTML = `
-    <div class="empty-state">
-      <svg class="gemini-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-      <p class="gemini-empty-heading">What would you like to extract?</p>
-      <p class="gemini-empty-sub">Type a feature name or natural language query below.</p>
+    <div class="cfm-convert-empty-state">
+      <svg class="cfm-convert-sparkle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+      <p class="cfm-convert-empty-heading">What would you like to extract?</p>
+      <p class="cfm-convert-empty-sub">Search and extract a feature from the selected project</p>
     </div>
   `;
 }
@@ -480,12 +488,20 @@ function appendFeatureChatBubble(role, html) {
   if (!featureChatArea) {
     return;
   }
-  if (featureChatArea.querySelector(".empty-state")) {
+  if (featureChatArea.querySelector(".cfm-convert-empty-state")) {
     featureChatArea.innerHTML = "";
   }
-  const className = role === "user" ? "gemini-user-msg" : "gemini-assistant-msg";
+  const className = role === "user" ? "cfm-convert-user-msg" : "cfm-convert-assistant-msg";
   featureChatArea.insertAdjacentHTML("beforeend", `<div class="${className}">${html}</div>`);
   scrollFeatureChatToBottom();
+}
+
+function syncFeatureComposerState() {
+  const sendButton = document.getElementById("runFeaturePreviewButton");
+  if (!sendButton || !featureSearchInput) {
+    return;
+  }
+  sendButton.disabled = !featureSearchInput.value.trim();
 }
 
 function featureTargetName(target) {
@@ -537,6 +553,7 @@ function openFeatureConvertPopup() {
 
   closeFeatureOptionsMenu();
   autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
   featureSearchInput.focus();
   renderAgentSearchStatus();
   renderFeatureSuggestions(state.recentFeatureSearches);
@@ -604,10 +621,12 @@ function renderAgentSearchStatus() {
         : `Searching in ${getFeatureTargetSearchLabel()}...`;
     }
     stopFeatureSearchButton?.classList.remove("hidden");
+    document.getElementById("runFeaturePreviewButton")?.classList.add("hidden");
     scrollFeatureChatToBottom();
   } else {
     featureThinkingIndicator?.classList.add("hidden");
     stopFeatureSearchButton?.classList.add("hidden");
+    document.getElementById("runFeaturePreviewButton")?.classList.remove("hidden");
   }
 }
 
@@ -646,10 +665,8 @@ function updateFeatureSelectedTargetDisplay() {
   }
   if (!state.featureSearchTargets.length) {
     featureSelectedTargetText.textContent = state.workspaceLabel || "Current Project";
-    featureAddTargetButton?.classList.add("hidden");
     return;
   }
-  featureAddTargetButton?.classList.remove("hidden");
   if (state.featureSearchTargets.length === 1) {
     featureSelectedTargetText.textContent = formatFeatureTargetLabel(state.featureSearchTargets[0]);
     return;
@@ -671,15 +688,18 @@ function renderFeatureTargetList() {
   if (!featureTargetList) {
     return;
   }
+  const targetSelection = document.getElementById("featureTargetSelection");
   if (!state.featureSearchTargets.length) {
     featureTargetList.innerHTML = "";
+    targetSelection?.classList.add("hidden");
     return;
   }
+  targetSelection?.classList.remove("hidden");
   featureTargetList.innerHTML = state.featureSearchTargets
     .map((target, index) => `
-      <span class="feature-target-chip">
-        <svg class="feature-target-chip-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${target.scopeType === "file" ? '<path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"></path>' : '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>'}</svg>
-        <span class="feature-target-chip-copy">
+      <span class="cfm-convert-target-chip">
+        <svg class="cfm-convert-target-chip-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${target.scopeType === "file" ? '<path d="M14 3v4a2 2 0 0 0 2 2h4"></path><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"></path>' : '<path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>'}</svg>
+        <span class="cfm-convert-target-chip-copy">
           <strong>${escapeHtml(featureTargetName(target))}</strong>
           <span>${escapeHtml(formatFeatureTargetLabel(target))}</span>
         </span>
@@ -709,31 +729,26 @@ function addFeatureSearchTarget(target) {
   renderFeatureTargetList();
 }
 
-function renderFeatureSuggestions(items = []) {
+function renderFeatureSuggestions(_items = []) {
   if (!featureSuggestions) {
     return;
   }
+  const items = (_items || []).map((item) => String(item || "").trim()).filter(Boolean).slice(0, 6);
   if (!items.length) {
     featureSuggestions.classList.add("hidden");
     featureSuggestions.innerHTML = "";
     return;
   }
-
   featureSuggestions.classList.remove("hidden");
   featureSuggestions.innerHTML = items
-    .map((item) => `<button class="feature-suggestion-chip" type="button" data-feature-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>`)
+    .map((item) => `<button class="cfm-convert-suggestion-chip" type="button" data-feature-suggestion="${escapeHtml(item)}">${escapeHtml(item)}</button>`)
     .join("");
-
-  featureSuggestions.querySelectorAll("[data-feature-suggestion]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      featureSearchInput.value = button.dataset.featureSuggestion || "";
-      renderFeatureSuggestions([]);
-      await previewFeatureConvert();
-    });
-  });
 }
 
 async function loadFeatureSuggestions() {
+  if (!featureSuggestions) {
+    return;
+  }
   if (!state.workspaceId) {
     return;
   }
@@ -803,12 +818,12 @@ function renderFeatureConvertPreview(preview) {
   }
 
   appendFeatureChatBubble("assistant", `
-    <div style="margin-bottom: 8px;"><strong>Preview ready for ${escapeHtml(preview.featureName)}</strong></div>
-    <div class="feature-summary-grid">
-      <div class="feature-summary-stat"><span>Files to create</span><strong>${preview.filesToCreate?.length || 0}</strong></div>
-      <div class="feature-summary-stat"><span>Code sections</span><strong>${preview.codeSections?.length || 0}</strong></div>
+    <div class="cfm-convert-result-title-group" style="margin-bottom:8px;"><strong>Preview ready for ${escapeHtml(preview.featureName)}</strong></div>
+    <div class="cfm-convert-result-summary">
+      <div class="cfm-convert-summary-stat"><span>Files to create</span><strong>${preview.filesToCreate?.length || 0}</strong></div>
+      <div class="cfm-convert-summary-stat"><span>Code sections</span><strong>${preview.codeSections?.length || 0}</strong></div>
     </div>
-    <div class="feature-result-meta" style="margin-top: 12px;">This feature folder is ready to be created.</div>
+    <div class="cfm-convert-summary-note">This feature folder is ready to be created.</div>
   `);
 }
 
@@ -816,7 +831,7 @@ function renderAgenticSearchResults(report, mode = "results") {
   if (!report?.groupedResults?.length) {
     appendFeatureChatBubble(
       "assistant",
-      '<div class="gemini-no-results">No related code or files were found for this query. Try another keyword or select a different folder.</div>',
+      '<div class="cfm-convert-no-results">No related code or files were found for this query. Try another keyword or select a different folder.</div>',
     );
     return;
   }
@@ -826,11 +841,17 @@ function renderAgenticSearchResults(report, mode = "results") {
   if (mode === "connections") {
     const connectionLines = (report.connections || [])
       .slice(0, 8)
-      .map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span style="color:rgba(255,255,255,0.45);font-size:0.78rem;">via ${escapeHtml(connection.via)}</span>` : ""}</div>`)
+      .map((connection) => `
+        <div class="cfm-convert-result-card">
+          <strong class="cfm-convert-result-filename">${escapeHtml(connection.from.split("/").pop() || connection.from)}</strong>
+          <div class="cfm-convert-connection-meta">${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}</div>
+          ${connection.via ? `<div class="cfm-convert-result-meta">via ${escapeHtml(connection.via)}</div>` : ""}
+        </div>
+      `)
       .join("");
     appendFeatureChatBubble("assistant", `
-      <div style="margin-bottom:8px;"><strong>Feature connections</strong></div>
-      ${connectionLines || '<div style="color:rgba(255,255,255,0.5);font-size:0.85rem;">No file-to-file connections were detected yet.</div>'}
+      <div class="cfm-convert-result-title-group" style="margin-bottom:8px;"><strong>Feature connections</strong></div>
+      <div class="cfm-convert-results-grid">${connectionLines || '<div class="cfm-convert-no-results">No file-to-file connections were detected yet.</div>'}</div>
     `);
     return;
   }
@@ -840,21 +861,21 @@ function renderAgenticSearchResults(report, mode = "results") {
       .filter((item) => state.selectedFeaturePaths.has(item.filePath))
       .slice(0, 6)
       .map((item) => `
-        <div class="gemini-result-card">
-          <div class="gemini-result-head">
-            <div class="gemini-result-title-group">
-              <strong class="gemini-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
-              <span class="gemini-result-filepath">${escapeHtml(item.filePath)}</span>
+        <div class="cfm-convert-result-card">
+          <div class="cfm-convert-result-head">
+            <div class="cfm-convert-result-title-group">
+              <strong class="cfm-convert-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
+              <span class="cfm-convert-result-filepath">${escapeHtml(item.filePath)}</span>
             </div>
-            <span class="gemini-result-meta">${escapeHtml(item.relevance || "Related")}</span>
+            <span class="cfm-convert-result-meta">${escapeHtml(item.relevance || "Related")}</span>
           </div>
-          <div class="gemini-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
-          <div class="gemini-result-code">${escapeHtml(featureResultPreview(item))}</div>
+          <div class="cfm-convert-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+          <div class="cfm-convert-result-code">${escapeHtml(featureResultPreview(item))}</div>
         </div>
       `)
       .join("");
     appendFeatureChatBubble("assistant", `
-      <div style="margin-bottom:8px;"><strong>Code preview</strong></div>
+      <div class="cfm-convert-result-title-group" style="margin-bottom:8px;"><strong>Code preview</strong></div>
       ${previewCards}
     `);
     return;
@@ -863,31 +884,31 @@ function renderAgenticSearchResults(report, mode = "results") {
   const filesCount = report.groupedResults.reduce((sum, g) => sum + g.items.length, 0);
   const cardsHtml = report.groupedResults
     .map((group) => `
-      <div class="gemini-result-card">
-        <div class="gemini-result-head">
-          <div class="gemini-result-title-group">
-            <strong class="gemini-result-filename">${escapeHtml(group.label)}</strong>
-            <span class="gemini-result-meta">${group.items.length} matched file${group.items.length === 1 ? "" : "s"}</span>
+      <div class="cfm-convert-result-card">
+        <div class="cfm-convert-result-head">
+          <div class="cfm-convert-result-title-group">
+            <strong class="cfm-convert-result-filename">${escapeHtml(group.label)}</strong>
+            <span class="cfm-convert-result-meta">${group.items.length} matched file${group.items.length === 1 ? "" : "s"}</span>
           </div>
         </div>
         ${group.items.slice(0, 4).map((item) => `
-          <div class="gemini-result-card">
-            <div class="gemini-result-head">
-              <div class="gemini-result-title-group">
-                <strong class="gemini-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
-                <span class="gemini-result-filepath">${escapeHtml(item.filePath)}</span>
+          <div class="cfm-convert-result-card">
+            <div class="cfm-convert-result-head">
+              <div class="cfm-convert-result-title-group">
+                <strong class="cfm-convert-result-filename">${escapeHtml(item.filePath.split("/").pop())}</strong>
+                <span class="cfm-convert-result-filepath">${escapeHtml(item.filePath)}</span>
               </div>
-              <span class="gemini-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</span>
+              <span class="cfm-convert-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</span>
             </div>
-            <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);">Section: ${escapeHtml(item.sectionNames?.[0] || "Related section")}</div>
-            <div style="font-size:0.78rem;color:rgba(255,255,255,0.55);">${escapeHtml(item.reason || "Matched feature-related logic.")}</div>
-            <div style="font-size:0.7rem;color:rgba(255,255,255,0.4);">Dependencies: ${escapeHtml((item.dependencies || []).slice(0, 4).join(", ") || "None")}</div>
-            <div class="gemini-result-code">${escapeHtml(featureResultPreview(item))}</div>
-            <div class="gemini-result-actions">
-              <button class="gemini-action-btn" type="button" data-open-feature-file="${escapeHtml(item.filePath)}">Open File</button>
-              <button class="gemini-action-btn" type="button" data-preview-feature-file="${escapeHtml(item.filePath)}">Preview Code</button>
-              <button class="gemini-action-btn" type="button" data-connections-feature-file="${escapeHtml(item.filePath)}">Show Connections</button>
-              <button class="gemini-explain-btn" type="button" data-explain-feature-file="${escapeHtml(item.filePath)}" title="Explain Simply" aria-label="Explain Simply">
+            <div class="cfm-convert-result-section">Section: ${escapeHtml(item.sectionNames?.[0] || "Related section")}</div>
+            <div class="cfm-convert-result-meta">${escapeHtml(item.reason || "Matched feature-related logic.")}</div>
+            <div class="cfm-convert-result-meta">Dependencies: ${escapeHtml((item.dependencies || []).slice(0, 4).join(", ") || "None")}</div>
+            <div class="cfm-convert-result-code">${escapeHtml(featureResultPreview(item))}</div>
+            <div class="cfm-convert-result-actions">
+              <button class="cfm-convert-action-btn" type="button" data-open-feature-file="${escapeHtml(item.filePath)}">Open File</button>
+              <button class="cfm-convert-action-btn" type="button" data-preview-feature-file="${escapeHtml(item.filePath)}">Preview Code</button>
+              <button class="cfm-convert-action-btn" type="button" data-connections-feature-file="${escapeHtml(item.filePath)}">Show Connections</button>
+              <button class="cfm-convert-explain-btn" type="button" data-explain-feature-file="${escapeHtml(item.filePath)}" title="Explain Simply" aria-label="Explain Simply">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 4.1 3 5.2V17a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2.8A6 6 0 0 0 18 9a6 6 0 0 0-6-6Z"></path><path d="M10 21h4"></path></svg>
               </button>
             </div>
@@ -898,27 +919,27 @@ function renderAgenticSearchResults(report, mode = "results") {
     .join("");
 
   appendFeatureChatBubble("assistant", `
-    <div style="margin-bottom: 10px;"><strong>Found ${filesCount} related files</strong></div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
-        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Files searched</span>
-        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.filesSearched ?? filesCount}</strong>
+    <div class="cfm-convert-result-title-group" style="margin-bottom:10px;"><strong>Found ${filesCount} related files</strong></div>
+    <div class="cfm-convert-result-summary">
+      <div class="cfm-convert-summary-stat">
+        <span>Files searched</span>
+        <strong>${report.summary?.filesSearched ?? filesCount}</strong>
       </div>
-      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
-        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Related files</span>
-        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.relatedFilesFound || filesCount}</strong>
+      <div class="cfm-convert-summary-stat">
+        <span>Related files</span>
+        <strong>${report.summary?.relatedFilesFound || filesCount}</strong>
       </div>
-      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
-        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Code sections</span>
-        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.relatedCodeSections || 0}</strong>
+      <div class="cfm-convert-summary-stat">
+        <span>Code sections</span>
+        <strong>${report.summary?.relatedCodeSections || 0}</strong>
       </div>
-      <div style="border-radius:16px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);padding:12px;">
-        <span style="display:block;font-size:0.72rem;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.08em;">Dependencies</span>
-        <strong style="font-size:1rem;color:#e8e8e8;">${report.summary?.dependenciesFound || 0}</strong>
+      <div class="cfm-convert-summary-stat">
+        <span>Dependencies</span>
+        <strong>${report.summary?.dependenciesFound || 0}</strong>
       </div>
     </div>
-    <div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-top:12px;">Search time: ${((report.elapsedMs || 0) / 1000).toFixed(1)} seconds. Searching in ${escapeHtml(describeFeatureSearchScope())}.</div>
-    ${cardsHtml}
+    <div class="cfm-convert-summary-note">Search time: ${((report.elapsedMs || 0) / 1000).toFixed(1)} seconds. Searching in ${escapeHtml(describeFeatureSearchScope())}.</div>
+    <div class="cfm-convert-results-grid">${cardsHtml}</div>
   `);
   
   const finalActions = document.getElementById("featureFinalActions");
@@ -2088,7 +2109,7 @@ async function previewFeatureConvert() {
   document.getElementById("featureFinalActions")?.classList.add("hidden");
   appendFeatureChatBubble("user", `
     ${escapeHtml(featureName)}
-    <div class="feature-result-meta" style="margin-top:6px;">Searching in ${escapeHtml(describeFeatureSearchScope())}</div>
+    <div class="cfm-convert-result-meta" style="margin-top:6px;">Searching in ${escapeHtml(describeFeatureSearchScope())}</div>
   `);
   renderAgentSearchStatus();
 
@@ -2109,12 +2130,7 @@ async function previewFeatureConvert() {
   setInlineMessage(featureConvertError, "");
   featureSearchInput.value = "";
   autoResizeFeatureSearchInput();
-  renderFeatureSuggestions(state.recentFeatureSearches);
-  // Show the new suggestion chips by default
-  const suggestionRow = document.querySelector('.gemini-suggestions');
-  if (suggestionRow) {
-    suggestionRow.classList.remove('hidden');
-  }
+  syncFeatureComposerState();
   startAgentSearchPolling();
 }
 
@@ -2148,13 +2164,10 @@ async function applyFeatureConvert() {
   
   const chatArea = document.getElementById("featureChatArea");
   if (chatArea) {
-    chatArea.innerHTML += `
-      <div class="chat-bubble assistant-message">
-        <strong>Feature Folder Created</strong>
-        <p>The feature "${escapeHtml(featureName)}" was successfully created and extracted.</p>
-      </div>
-    `;
-    chatArea.scrollTop = chatArea.scrollHeight;
+    appendFeatureChatBubble("assistant", `
+      <strong>Feature Folder Created</strong>
+      <p>The feature "${escapeHtml(featureName)}" was successfully created and extracted.</p>
+    `);
   }
 
   syncFeatureInput.value = state.lastConvertedFeatureSlug;
@@ -2905,17 +2918,15 @@ document.getElementById("syncFeatureButton").addEventListener("click", () => {
   openFeatureSyncPopup();
 });
 document.getElementById("closeSearchPopupButton").addEventListener("click", closeSearchPopup);
-document.getElementById("closeFeatureConvertPopupButton").addEventListener("click", closeFeatureConvertPopup);
+bindConvertElementEvent("closeFeatureConvertPopupButton", "click", closeFeatureConvertPopup);
 document.getElementById("closeFeatureSyncPopupButton").addEventListener("click", closeFeatureSyncPopup);
-document.getElementById("cancelFeatureConvertButton").addEventListener("click", closeFeatureConvertPopup);
 document.getElementById("cancelFeatureSyncButton").addEventListener("click", closeFeatureSyncPopup);
-document.getElementById("runFeaturePreviewButton").addEventListener("click", previewFeatureConvert);
-stopFeatureSearchButton.addEventListener("click", stopFeatureSearch);
-document.getElementById("applyFeatureConvertButton").addEventListener("click", applyFeatureConvert);
-document.getElementById("undoFeatureConvertButton").addEventListener("click", undoFeatureConvert);
-document.getElementById("showFeatureConnectionsButton").addEventListener("click", showFeatureConnections);
-document.getElementById("previewSelectedFeatureCodeButton").addEventListener("click", previewSelectedFeatureCode);
-document.getElementById("openSelectedFeatureFileButton").addEventListener("click", openFirstSelectedFeatureFile);
+bindConvertElementEvent("runFeaturePreviewButton", "click", previewFeatureConvert);
+bindConvertElementEvent("stopFeatureSearchButton", "click", stopFeatureSearch);
+bindConvertElementEvent("applyFeatureConvertButton", "click", applyFeatureConvert);
+bindConvertElementEvent("showFeatureConnectionsButton", "click", showFeatureConnections);
+bindConvertElementEvent("previewSelectedFeatureCodeButton", "click", previewSelectedFeatureCode);
+bindConvertElementEvent("openSelectedFeatureFileButton", "click", openFirstSelectedFeatureFile);
 document.getElementById("previewFeatureSyncButton").addEventListener("click", previewFeatureSync);
 document.getElementById("applyFeatureSyncButton").addEventListener("click", applyFeatureSync);
 document.getElementById("undoLastSyncButton").addEventListener("click", undoLastSync);
@@ -2970,12 +2981,23 @@ featureSearchInput.addEventListener("keydown", async (event) => {
 });
 featureSearchInput.addEventListener("input", () => {
   autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
   if (featureSuggestionTimer) {
     window.clearTimeout(featureSuggestionTimer);
   }
   featureSuggestionTimer = window.setTimeout(() => {
     loadFeatureSuggestions().catch(() => undefined);
   }, 180);
+});
+featureSuggestions?.addEventListener("click", (event) => {
+  const suggestionButton = event.target.closest("[data-feature-suggestion]");
+  if (!suggestionButton) {
+    return;
+  }
+  featureSearchInput.value = suggestionButton.dataset.featureSuggestion || "";
+  autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
+  featureSearchInput.focus();
 });
 featureChatArea?.addEventListener("click", async (event) => {
   const openButton = event.target.closest("[data-open-feature-file]");
@@ -2993,8 +3015,8 @@ featureChatArea?.addEventListener("click", async (event) => {
     }
     appendFeatureChatBubble("assistant", `
       <strong>Code preview for ${escapeHtml(item.filePath.split("/").pop())}</strong>
-      <div class="feature-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
-      <div class="feature-result-code">${escapeHtml(featureResultPreview(item))}</div>
+      <div class="cfm-convert-result-meta">Lines ${escapeHtml(featureResultLineSummary(item))}</div>
+      <div class="cfm-convert-result-code">${escapeHtml(featureResultPreview(item))}</div>
     `);
     return;
   }
@@ -3005,11 +3027,11 @@ featureChatArea?.addEventListener("click", async (event) => {
     const relatedConnections = (state.agentSearchReport?.connections || []).filter((connection) => connection.from === filePath || connection.to === filePath);
     appendFeatureChatBubble("assistant", `
       <strong>Connections for ${escapeHtml(filePath.split("/").pop())}</strong>
-      <div class="feature-results-grid">
-        <div class="feature-result-card">
+      <div class="cfm-convert-results-grid">
+        <div class="cfm-convert-result-card">
           ${relatedConnections.length
-            ? relatedConnections.map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span class="feature-result-meta">via ${escapeHtml(connection.via)}</span>` : ""}</div>`).join("")
-            : '<div class="feature-result-empty">No direct connections were detected for this file.</div>'}
+            ? relatedConnections.map((connection) => `<div>${escapeHtml(connection.from)} &rarr; ${escapeHtml(connection.to)}${connection.via ? ` <span class="cfm-convert-result-meta">via ${escapeHtml(connection.via)}</span>` : ""}</div>`).join("")
+            : '<div class="cfm-convert-no-results">No direct connections were detected for this file.</div>'}
         </div>
       </div>
     `);
@@ -3024,7 +3046,7 @@ featureChatArea?.addEventListener("click", async (event) => {
     }
     appendFeatureChatBubble("assistant", `
       <strong>Simple explanation</strong>
-      <div class="feature-simple-copy">${escapeHtml(featureResultExplainSimply(item))}</div>
+      <div class="cfm-convert-simple-copy">${escapeHtml(featureResultExplainSimply(item))}</div>
     `);
   }
 });
@@ -3034,18 +3056,19 @@ syncFeatureInput.addEventListener("keydown", async (event) => {
     await previewFeatureSync();
   }
 });
-document.getElementById("clearFeatureSearchButton").addEventListener("click", () => {
+bindConvertElementEvent("clearFeatureSearchButton", "click", () => {
   featureSearchInput.value = "";
   autoResizeFeatureSearchInput();
+  syncFeatureComposerState();
   renderFeatureSuggestions(state.recentFeatureSearches);
 });
-featureOptionsButton.addEventListener("click", () => {
+bindConvertElementEvent("featureOptionsButton", "click", () => {
   toggleFeatureOptionsMenu();
 });
-featureVoiceSearchButton.addEventListener("click", async () => {
+bindConvertElementEvent("featureVoiceSearchButton", "click", async () => {
   if (voiceRecognition) {
     stopVoiceSearch();
-    featureVoiceSearchButton.classList.remove("is-active");
+    featureVoiceSearchButton?.classList.remove("is-active");
     return;
   }
   await startFeatureVoiceSearch();
@@ -3053,7 +3076,26 @@ featureVoiceSearchButton.addEventListener("click", async () => {
 featureAddTargetButton?.addEventListener("click", () => {
   toggleFeatureOptionsMenu();
 });
-document.getElementById("featureSelectFolderButton").addEventListener("click", async () => {
+bindConvertElementEvent("featureJoinCurrentTargetButton", "click", () => {
+  closeFeatureOptionsMenu();
+  if (!state.workspaceId) {
+    showBanner("error", "Open a workspace first.");
+    return;
+  }
+  if (state.currentItemType === "file" && state.currentPath) {
+    addFeatureSearchTarget({ path: state.currentPath, scopeType: "file" });
+    showBanner("success", `${state.currentPath} joined the current search target.`);
+    return;
+  }
+  if (state.currentItemType === "folder" && state.currentPath) {
+    addFeatureSearchTarget({ path: state.currentPath, scopeType: "folder" });
+    showBanner("success", `${state.currentPath} joined the current search target.`);
+    return;
+  }
+  addFeatureSearchTarget({ path: "", scopeType: "folder" });
+  showBanner("success", "Current project joined the search target.");
+});
+bindConvertElementEvent("featureSelectFolderButton", "click", async () => {
   closeFeatureOptionsMenu();
   if (!state.workspaceId) {
     showBanner("error", "Open a workspace first.");
@@ -3073,7 +3115,7 @@ document.getElementById("featureSelectFolderButton").addEventListener("click", a
   addFeatureSearchTarget({ path: parent, scopeType: "folder" });
   showBanner("success", `${parent || state.workspaceLabel || "Current project"} added to search targets.`);
 });
-document.getElementById("featureSelectFilesButton").addEventListener("click", async () => {
+bindConvertElementEvent("featureSelectFilesButton", "click", async () => {
   closeFeatureOptionsMenu();
   if (!state.workspaceId) {
     showBanner("error", "Open a workspace first.");
@@ -3085,13 +3127,6 @@ document.getElementById("featureSelectFilesButton").addEventListener("click", as
   }
   addFeatureSearchTarget({ path: state.currentPath, scopeType: "file" });
   showBanner("success", `${state.currentPath} added to search targets.`);
-});
-document.getElementById("featureUseCurrentProjectButton").addEventListener("click", () => {
-  closeFeatureOptionsMenu();
-  state.featureSearchTargets = [];
-  updateFeatureSelectedTargetDisplay();
-  renderFeatureTargetList();
-  showBanner("success", "Search target reset to the current project.");
 });
 async function useRecentFeatureLocations() {
   closeFeatureOptionsMenu();
@@ -3110,35 +3145,15 @@ async function useRecentFeatureLocations() {
   renderFeatureTargetList();
   showBanner("success", "Recent locations added to search targets.");
 }
-document.getElementById("featureRecentLocationsButton").addEventListener("click", useRecentFeatureLocations);
-document.getElementById("featureOpenRecentLocationsButton").addEventListener("click", useRecentFeatureLocations);
-document.getElementById("featurePreviewCodeMenuButton").addEventListener("click", () => {
-  closeFeatureOptionsMenu();
-  previewSelectedFeatureCode();
-});
-document.getElementById("featureOpenFileMenuButton").addEventListener("click", async () => {
-  closeFeatureOptionsMenu();
-  await openFirstSelectedFeatureFile();
-});
-document.getElementById("featureShowConnectionsMenuButton").addEventListener("click", () => {
-  closeFeatureOptionsMenu();
-  showFeatureConnections();
-});
-document.getElementById("featureCreateFolderMenuButton").addEventListener("click", async () => {
-  closeFeatureOptionsMenu();
-  await applyFeatureConvert();
-});
-document.getElementById("featureUndoMenuButton").addEventListener("click", async () => {
+bindConvertElementEvent("featureRecentLocationsButton", "click", useRecentFeatureLocations);
+bindConvertElementEvent("featureUndoMenuButton", "click", async () => {
   closeFeatureOptionsMenu();
   await undoFeatureConvert();
 });
-document.getElementById("featureCancelSearchMenuButton").addEventListener("click", () => {
-  closeFeatureOptionsMenu();
-  closeFeatureConvertPopup();
-});
-document.getElementById("featureStopSearchMenuButton").addEventListener("click", async () => {
-  closeFeatureOptionsMenu();
-  await stopFeatureSearch();
+bindConvertElementEvent("cancelFeatureConvertButton", "click", closeFeatureConvertPopup);
+bindConvertElementEvent("cancelFeatureConvertButtonMenu", "click", closeFeatureConvertPopup);
+bindConvertElementEvent("undoFeatureConvertButton", "click", async () => {
+  await undoFeatureConvert();
 });
 
 document.getElementById("companyInfoButton").addEventListener("click", openCompanyInfo);
@@ -3373,3 +3388,4 @@ window.addEventListener("keydown", async (event) => {
 });
 
 initializeDashboard();
+
