@@ -352,31 +352,34 @@
             <button class="cfm-convert-sidebar-toggle" id="featureSidebarToggleButton" type="button" aria-label="Collapse Extract sidebar" title="Collapse sidebar">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18 9 12l6-6"></path></svg>
             </button>
-            <button class="cfm-convert-sidebar-new" id="featureNewConversationButton" type="button">
-              <span class="cfm-convert-sidebar-icon">+</span>
-              <span class="cfm-convert-sidebar-label">New Conversation</span>
+            <div class="cfm-convert-sidebar-title">
+              <span class="cfm-convert-sidebar-label">File tools</span>
+              <span class="cfm-convert-sidebar-sub">Extract target setup</span>
+            </div>
+          </div>
+          <div class="cfm-convert-sidebar-actions">
+            <button class="cfm-convert-sidebar-action" id="featureSidebarAddFolderButton" type="button">
+              <span class="cfm-convert-sidebar-icon">F</span>
+              <span>Add Folder</span>
+            </button>
+            <button class="cfm-convert-sidebar-action" id="featureSidebarAddFileButton" type="button">
+              <span class="cfm-convert-sidebar-icon">D</span>
+              <span>Add File</span>
+            </button>
+            <button class="cfm-convert-sidebar-action primary" id="featureSidebarConvertButton" type="button">
+              <span class="cfm-convert-sidebar-icon">C</span>
+              <span>Convert</span>
             </button>
           </div>
           <div class="cfm-convert-sidebar-scroll">
             <div class="cfm-convert-sidebar-section">
-              <div class="cfm-convert-sidebar-heading">Conversation History</div>
-              <div class="cfm-convert-sidebar-list" id="featureSidebarChatList"></div>
-              <button class="cfm-convert-sidebar-see-all" id="featureSidebarSeeAllChatsButton" type="button">See all</button>
-            </div>
-            <div class="cfm-convert-sidebar-section">
-              <div class="cfm-convert-sidebar-heading">Projects</div>
-              <div class="cfm-convert-sidebar-list" id="featureSidebarProjectList"></div>
-            </div>
-            <div class="cfm-convert-sidebar-section">
-              <div class="cfm-convert-sidebar-heading">Recent Files</div>
-              <div class="cfm-convert-sidebar-list" id="featureSidebarFileList"></div>
-              <button class="cfm-convert-sidebar-see-all" id="featureSidebarSeeAllFilesButton" type="button">See all</button>
+              <div class="cfm-convert-sidebar-heading">Selected target</div>
+              <div class="cfm-convert-sidebar-target-summary" id="featureSidebarTargetSummary">No file or folder selected</div>
+              <div class="cfm-convert-sidebar-list" id="featureSidebarTargetList"></div>
             </div>
           </div>
-          <button class="cfm-convert-sidebar-settings" id="featureSidebarSettingsButton" type="button">
-            <span class="cfm-convert-sidebar-icon">••</span>
-            <span class="cfm-convert-sidebar-label">Settings</span>
-          </button>
+          <input class="cfm-convert-picker-input" id="featureSidebarFilePicker" type="file" multiple hidden />
+          <input class="cfm-convert-picker-input" id="featureSidebarFolderPicker" type="file" multiple webkitdirectory directory hidden />
         </aside>
 
         <div class="cfm-convert-target-list-wrap hidden" id="featureTargetSelection">

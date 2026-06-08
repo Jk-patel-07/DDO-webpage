@@ -175,9 +175,10 @@ const featureVoiceSearchButton = document.getElementById("featureVoiceSearchButt
 const featureHistoryPanel = document.getElementById("featureHistoryPanel");
 const featureFileHistoryList = document.getElementById("featureFileHistoryList");
 const featureChatHistoryList = document.getElementById("featureChatHistoryList");
-const featureSidebarChatList = document.getElementById("featureSidebarChatList");
-const featureSidebarProjectList = document.getElementById("featureSidebarProjectList");
-const featureSidebarFileList = document.getElementById("featureSidebarFileList");
+const featureSidebarTargetSummary = document.getElementById("featureSidebarTargetSummary");
+const featureSidebarTargetList = document.getElementById("featureSidebarTargetList");
+const featureSidebarFilePicker = document.getElementById("featureSidebarFilePicker");
+const featureSidebarFolderPicker = document.getElementById("featureSidebarFolderPicker");
 let bannerTimerId = 0;
 let agentSearchPollTimer = 0;
 let featureSuggestionTimer = 0;
@@ -490,81 +491,29 @@ function setFeatureSidebarActive(activeId) {
 function renderFeatureSidebar() {
   featureConvertPopup?.classList.toggle("cfm-convert-sidebar-collapsed", state.convertSidebarCollapsed);
 
-  const projects = [
-    { id: "project-current", name: state.workspaceLabel || "DDO webpage", meta: "Current workspace", path: "" },
-    { id: "project-ddo", name: "DDO", meta: "Project", path: "DDO" },
-    { id: "project-ddo-webpage", name: "DDO webpage", meta: "Project", path: "" },
-    { id: "project-jarvis", name: "JARVIS", meta: "Project", path: "JARVIS" },
-  ];
-
-  if (featureSidebarProjectList) {
-    featureSidebarProjectList.innerHTML = projects.map((project) => `
-      <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === project.id ? " active" : ""}" type="button" data-feature-sidebar-project="${escapeHtml(project.id)}" data-feature-sidebar-project-path="${escapeHtml(project.path)}">
-        <span class="cfm-convert-sidebar-main">${escapeHtml(project.name)}</span>
-        <span class="cfm-convert-sidebar-sub">${escapeHtml(project.meta)}</span>
-      </button>
-    `).join("");
-
-    featureSidebarProjectList.querySelectorAll("[data-feature-sidebar-project]").forEach((button) => {
-      button.addEventListener("click", () => {
-        state.featureSearchTargets = [{
-          path: button.dataset.featureSidebarProjectPath || "",
-          scopeType: "folder",
-        }];
-        updateFeatureSelectedTargetDisplay();
-        renderFeatureTargetList();
-        setFeatureSidebarActive(button.dataset.featureSidebarProject || "project-current");
-        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
-      });
-    });
+  if (featureSidebarTargetSummary) {
+    const count = state.featureSearchTargets.length;
+    featureSidebarTargetSummary.textContent = count
+      ? `${count} selected ${count === 1 ? "target" : "targets"}`
+      : "No file or folder selected";
   }
 
-  if (featureSidebarFileList) {
-    const files = (state.recentWorkspaceLocations || []).slice(0, 8);
-    featureSidebarFileList.innerHTML = files.length
-      ? files.map((file, index) => `
-        <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === `file-${index}` ? " active" : ""}" type="button" data-feature-sidebar-file="${index}" data-feature-sidebar-file-path="${escapeHtml(file.targetPath || "")}" data-feature-sidebar-file-type="${escapeHtml(file.itemType === "folder" ? "folder" : "file")}">
-          <span class="cfm-convert-sidebar-main">${escapeHtml(featureTargetName({ path: file.targetPath || "" }))}</span>
-          <span class="cfm-convert-sidebar-sub">${escapeHtml(file.targetPath || state.workspaceLabel || "Current project")}</span>
+  if (featureSidebarTargetList) {
+    featureSidebarTargetList.innerHTML = state.featureSearchTargets.length
+      ? state.featureSearchTargets.map((target, index) => `
+        <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === `target-${index}` ? " active" : ""}" type="button" data-feature-sidebar-target="${index}">
+          <span class="cfm-convert-sidebar-icon">${target.scopeType === "file" ? "D" : "F"}</span>
+          <span class="cfm-convert-sidebar-copy">
+            <span class="cfm-convert-sidebar-main">${escapeHtml(featureTargetName(target))}</span>
+            <span class="cfm-convert-sidebar-sub">${escapeHtml(formatFeatureTargetLabel(target))}</span>
+          </span>
         </button>
       `).join("")
-      : '<div class="cfm-convert-sidebar-empty">No recent files yet.</div>';
+      : '<div class="cfm-convert-sidebar-empty">No file or folder selected</div>';
 
-    featureSidebarFileList.querySelectorAll("[data-feature-sidebar-file]").forEach((button) => {
+    featureSidebarTargetList.querySelectorAll("[data-feature-sidebar-target]").forEach((button) => {
       button.addEventListener("click", () => {
-        state.featureSearchTargets = [{
-          path: button.dataset.featureSidebarFilePath || "",
-          scopeType: button.dataset.featureSidebarFileType === "folder" ? "folder" : "file",
-        }];
-        updateFeatureSelectedTargetDisplay();
-        renderFeatureTargetList();
-        setFeatureSidebarActive(`file-${button.dataset.featureSidebarFile}`);
-        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
-      });
-    });
-  }
-
-  if (featureSidebarChatList) {
-    const conversationItems = state.featureConversationHistory.slice(0, 8);
-    const fallbackItems = state.recentFeatureSearches
-      .filter((query) => !conversationItems.some((item) => item.query === query))
-      .slice(0, Math.max(0, 8 - conversationItems.length))
-      .map((query, index) => ({ id: `recent-${index}`, query, targets: [], report: null }));
-    const chats = [...conversationItems, ...fallbackItems];
-
-    featureSidebarChatList.innerHTML = chats.length
-      ? chats.map((chat) => `
-        <button class="cfm-convert-sidebar-item${state.activeFeatureSidebarItem === `chat-${chat.id}` ? " active" : ""}" type="button" data-feature-sidebar-chat="${escapeHtml(chat.id)}">
-          <span class="cfm-convert-sidebar-main">${escapeHtml(chat.query)}</span>
-          <span class="cfm-convert-sidebar-sub">${chat.report ? "Saved Extract result" : "Previous Extract search"}</span>
-        </button>
-      `).join("")
-      : '<div class="cfm-convert-sidebar-empty">No Extract chats yet.</div>';
-
-    featureSidebarChatList.querySelectorAll("[data-feature-sidebar-chat]").forEach((button) => {
-      button.addEventListener("click", () => {
-        restoreFeatureConversation(button.dataset.featureSidebarChat || "");
-        featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
+        setFeatureSidebarActive(`target-${button.dataset.featureSidebarTarget}`);
       });
     });
   }
@@ -618,6 +567,35 @@ function restoreFeatureConversation(conversationId) {
   }
 
   setFeatureSidebarActive(`chat-${conversationId}`);
+}
+
+function addFeatureTargetsFromPicker(files, scopeType) {
+  const pickedFiles = Array.from(files || []);
+  if (!pickedFiles.length) {
+    return;
+  }
+
+  if (scopeType === "folder") {
+    const folderNames = new Set(
+      pickedFiles
+        .map((file) => String(file.webkitRelativePath || file.name || "").split("/").filter(Boolean)[0])
+        .filter(Boolean),
+    );
+    if (!folderNames.size) {
+      folderNames.add(pickedFiles[0]?.name || "");
+    }
+    folderNames.forEach((folderName) => {
+      addFeatureSearchTarget({ path: folderName, scopeType: "folder" });
+    });
+    return;
+  }
+
+  pickedFiles.forEach((file) => {
+    addFeatureSearchTarget({
+      path: String(file.webkitRelativePath || file.name || "").replace(/^\/+/, ""),
+      scopeType: "file",
+    });
+  });
 }
 
 function renderFeatureHistoryPanel() {
@@ -917,6 +895,7 @@ function renderFeatureTargetList() {
       state.featureSearchTargets.splice(Number(button.dataset.removeFeatureTarget), 1);
       updateFeatureSelectedTargetDisplay();
       renderFeatureTargetList();
+      renderFeatureSidebar();
     });
   });
 }
@@ -930,8 +909,10 @@ function addFeatureSearchTarget(target) {
   if (!exists) {
     state.featureSearchTargets.push(normalized);
   }
+  state.activeFeatureSidebarItem = `target-${Math.max(0, state.featureSearchTargets.length - 1)}`;
   updateFeatureSelectedTargetDisplay();
   renderFeatureTargetList();
+  renderFeatureSidebar();
 }
 
 function renderFeatureSuggestions(_items = []) {
@@ -3279,26 +3260,23 @@ bindConvertElementEvent("featureSidebarToggleButton", "click", () => {
   state.convertSidebarCollapsed = !state.convertSidebarCollapsed;
   renderFeatureSidebar();
 });
-bindConvertElementEvent("featureNewConversationButton", "click", () => {
-  state.agentSearchReport = null;
-  state.featureConvertPreview = null;
-  state.selectedFeaturePaths = new Set();
-  document.getElementById("featureFinalActions")?.classList.add("hidden");
-  featureSearchInput.value = "";
-  setFeatureChatEmptyState();
-  autoResizeFeatureSearchInput();
-  syncFeatureComposerState();
-  setFeatureSidebarActive("new-conversation");
-  featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
-  featureSearchInput.focus();
+bindConvertElementEvent("featureSidebarAddFolderButton", "click", () => {
+  featureSidebarFolderPicker?.click();
 });
-bindConvertElementEvent("featureSidebarSeeAllChatsButton", "click", toggleFeatureHistoryPanel);
-bindConvertElementEvent("featureSidebarSeeAllFilesButton", "click", toggleFeatureHistoryPanel);
-bindConvertElementEvent("featureSidebarSettingsButton", "click", () => {
+bindConvertElementEvent("featureSidebarAddFileButton", "click", () => {
+  featureSidebarFilePicker?.click();
+});
+bindConvertElementEvent("featureSidebarConvertButton", "click", async () => {
   featureConvertPopup?.classList.remove("cfm-convert-sidebar-open");
-  closeFeatureOptionsMenu();
-  featureHistoryPanel?.classList.add("hidden");
-  settingsButton?.click();
+  await previewFeatureConvert();
+});
+featureSidebarFolderPicker?.addEventListener("change", (event) => {
+  addFeatureTargetsFromPicker(event.target.files, "folder");
+  event.target.value = "";
+});
+featureSidebarFilePicker?.addEventListener("change", (event) => {
+  addFeatureTargetsFromPicker(event.target.files, "file");
+  event.target.value = "";
 });
 bindConvertElementEvent("featureVoiceSearchButton", "click", async () => {
   if (voiceRecognition) {
