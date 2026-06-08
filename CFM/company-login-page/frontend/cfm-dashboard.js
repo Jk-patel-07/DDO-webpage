@@ -169,7 +169,9 @@ const featureSelectedTargetText = document.getElementById("featureSelectedTarget
 const featureAddTargetButton = document.getElementById("featureAddTargetButton");
 const featureOptionsMenu = document.getElementById("featureOptionsMenu");
 const featureVoiceSearchButton = document.getElementById("featureVoiceSearchButton");
-const stopFeatureSearchButton = document.getElementById("stopFeatureSearchButton");
+const featureHistoryPanel = document.getElementById("featureHistoryPanel");
+const featureFileHistoryList = document.getElementById("featureFileHistoryList");
+const featureChatHistoryList = document.getElementById("featureChatHistoryList");
 let bannerTimerId = 0;
 let agentSearchPollTimer = 0;
 let featureSuggestionTimer = 0;
@@ -435,6 +437,7 @@ function closeFeatureConvertPopup() {
   featureConvertPopup.classList.add("hidden");
   stopAgentSearchPolling();
   closeFeatureOptionsMenu();
+  featureHistoryPanel?.classList.add("hidden");
   featureThinkingIndicator?.classList.add("hidden");
   stopVoiceSearch();
 }
@@ -460,6 +463,7 @@ function closeFeatureOptionsMenu() {
 
 function toggleFeatureOptionsMenu() {
   featureOptionsMenu?.classList.toggle("hidden");
+  featureHistoryPanel?.classList.add("hidden");
 }
 
 function bindConvertElementEvent(id, eventName, handler) {
@@ -469,6 +473,59 @@ function bindConvertElementEvent(id, eventName, handler) {
   }
   element.addEventListener(eventName, handler);
   return element;
+}
+
+function renderFeatureHistoryPanel() {
+  if (featureFileHistoryList) {
+    const fileItems = (state.recentWorkspaceLocations || []).slice(0, 8);
+    featureFileHistoryList.innerHTML = fileItems.length
+      ? fileItems.map((item) => `
+        <button class="cfm-convert-history-item" type="button" data-feature-history-path="${escapeHtml(item.targetPath || "")}" data-feature-history-type="${escapeHtml(item.itemType === "folder" ? "folder" : "file")}">
+          <span class="cfm-convert-history-item-title">${escapeHtml(item.targetPath || state.workspaceLabel || "Current project")}</span>
+          <span class="cfm-convert-history-item-meta">${escapeHtml(item.itemType === "folder" ? "Folder" : "File")}</span>
+        </button>
+      `).join("")
+      : '<div class="cfm-convert-history-empty">No file history yet.</div>';
+
+    featureFileHistoryList.querySelectorAll("[data-feature-history-path]").forEach((button) => {
+      button.addEventListener("click", () => {
+        addFeatureSearchTarget({
+          path: button.dataset.featureHistoryPath || "",
+          scopeType: button.dataset.featureHistoryType === "folder" ? "folder" : "file",
+        });
+        featureHistoryPanel?.classList.add("hidden");
+      });
+    });
+  }
+
+  if (featureChatHistoryList) {
+    const chatItems = (state.recentFeatureSearches || []).slice(0, 8);
+    featureChatHistoryList.innerHTML = chatItems.length
+      ? chatItems.map((item) => `
+        <button class="cfm-convert-history-item" type="button" data-feature-chat-history="${escapeHtml(item)}">
+          <span class="cfm-convert-history-item-title">${escapeHtml(item)}</span>
+          <span class="cfm-convert-history-item-meta">Recent search</span>
+        </button>
+      `).join("")
+      : '<div class="cfm-convert-history-empty">No chat history yet.</div>';
+
+    featureChatHistoryList.querySelectorAll("[data-feature-chat-history]").forEach((button) => {
+      button.addEventListener("click", () => {
+        featureSearchInput.value = button.dataset.featureChatHistory || "";
+        autoResizeFeatureSearchInput();
+        syncFeatureComposerState();
+        featureHistoryPanel?.classList.add("hidden");
+        featureSearchInput.focus();
+      });
+    });
+  }
+}
+
+async function toggleFeatureHistoryPanel() {
+  closeFeatureOptionsMenu();
+  await loadRecentWorkspaceLocations().catch(() => undefined);
+  renderFeatureHistoryPanel();
+  featureHistoryPanel?.classList.toggle("hidden");
 }
 
 function setFeatureChatEmptyState() {
@@ -547,6 +604,7 @@ function openFeatureConvertPopup() {
   renderFeatureTargetList();
   loadRecentWorkspaceLocations().catch(() => undefined);
   setFeatureChatEmptyState();
+  renderFeatureHistoryPanel();
 
   const finalActions = document.getElementById("featureFinalActions");
   if (finalActions) finalActions.classList.add("hidden");
@@ -610,6 +668,9 @@ function renderNotifications() {
 
 function renderAgentSearchStatus() {
   if (state.agentSearchStatus === "running" || state.agentSearchStatus === "stopping") {
+    if (featureThinkingIndicator && featureChatArea && featureThinkingIndicator.parentElement !== featureChatArea) {
+      featureChatArea.appendChild(featureThinkingIndicator);
+    }
     featureThinkingIndicator?.classList.remove("hidden");
 
     if (state.agentSearchLogs && state.agentSearchLogs.length > 0) {
@@ -620,12 +681,9 @@ function renderAgentSearchStatus() {
         ? "Stopping search..."
         : `Searching in ${getFeatureTargetSearchLabel()}...`;
     }
-    stopFeatureSearchButton?.classList.remove("hidden");
-    document.getElementById("runFeaturePreviewButton")?.classList.add("hidden");
     scrollFeatureChatToBottom();
   } else {
     featureThinkingIndicator?.classList.add("hidden");
-    stopFeatureSearchButton?.classList.add("hidden");
     document.getElementById("runFeaturePreviewButton")?.classList.remove("hidden");
   }
 }
@@ -2127,6 +2185,7 @@ async function previewFeatureConvert() {
 
   state.agentSearchJobId = result.jobId || "";
   saveRecentFeatureSearch(featureName);
+  renderFeatureHistoryPanel();
   setInlineMessage(featureConvertError, "");
   featureSearchInput.value = "";
   autoResizeFeatureSearchInput();
@@ -2922,7 +2981,6 @@ bindConvertElementEvent("closeFeatureConvertPopupButton", "click", closeFeatureC
 document.getElementById("closeFeatureSyncPopupButton").addEventListener("click", closeFeatureSyncPopup);
 document.getElementById("cancelFeatureSyncButton").addEventListener("click", closeFeatureSyncPopup);
 bindConvertElementEvent("runFeaturePreviewButton", "click", previewFeatureConvert);
-bindConvertElementEvent("stopFeatureSearchButton", "click", stopFeatureSearch);
 bindConvertElementEvent("applyFeatureConvertButton", "click", applyFeatureConvert);
 bindConvertElementEvent("showFeatureConnectionsButton", "click", showFeatureConnections);
 bindConvertElementEvent("previewSelectedFeatureCodeButton", "click", previewSelectedFeatureCode);
@@ -3130,6 +3188,7 @@ bindConvertElementEvent("featureSelectFilesButton", "click", async () => {
 });
 async function useRecentFeatureLocations() {
   closeFeatureOptionsMenu();
+  featureHistoryPanel?.classList.add("hidden");
   await loadRecentWorkspaceLocations().catch(() => undefined);
   if (!state.recentWorkspaceLocations.length) {
     showBanner("error", "No recent locations found yet.");
@@ -3145,13 +3204,13 @@ async function useRecentFeatureLocations() {
   renderFeatureTargetList();
   showBanner("success", "Recent locations added to search targets.");
 }
-bindConvertElementEvent("featureRecentLocationsButton", "click", useRecentFeatureLocations);
+bindConvertElementEvent("featureRecentLocationsButton", "click", toggleFeatureHistoryPanel);
+bindConvertElementEvent("featureUseRecentFilesButton", "click", useRecentFeatureLocations);
 bindConvertElementEvent("featureUndoMenuButton", "click", async () => {
   closeFeatureOptionsMenu();
   await undoFeatureConvert();
 });
 bindConvertElementEvent("cancelFeatureConvertButton", "click", closeFeatureConvertPopup);
-bindConvertElementEvent("cancelFeatureConvertButtonMenu", "click", closeFeatureConvertPopup);
 bindConvertElementEvent("undoFeatureConvertButton", "click", async () => {
   await undoFeatureConvert();
 });
@@ -3358,6 +3417,9 @@ window.addEventListener("click", (event) => {
   }
   if (!event.target.closest("#featureOptionsMenu") && !event.target.closest("#featureOptionsButton") && !event.target.closest("#featureAddTargetButton")) {
     closeFeatureOptionsMenu();
+  }
+  if (!event.target.closest("#featureHistoryPanel") && !event.target.closest("#featureRecentLocationsButton")) {
+    featureHistoryPanel?.classList.add("hidden");
   }
   if (!event.target.closest(".preview-dropdown")) {
     previewDropdownMenu.classList.add("hidden");

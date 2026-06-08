@@ -351,6 +351,26 @@
           <div class="cfm-convert-target-list" id="featureTargetList"></div>
         </div>
 
+        <div class="cfm-convert-history-panel hidden" id="featureHistoryPanel" aria-label="Convert history">
+          <div class="cfm-convert-history-section">
+            <div class="cfm-convert-history-head">
+              <span>File history</span>
+              <button class="cfm-convert-history-text-button" id="featureUseRecentFilesButton" type="button">Use recent</button>
+            </div>
+            <div class="cfm-convert-history-list" id="featureFileHistoryList">
+              <div class="cfm-convert-history-empty">No file history yet.</div>
+            </div>
+          </div>
+          <div class="cfm-convert-history-section">
+            <div class="cfm-convert-history-head">
+              <span>Chat history</span>
+            </div>
+            <div class="cfm-convert-history-list" id="featureChatHistoryList">
+              <div class="cfm-convert-history-empty">No chat history yet.</div>
+            </div>
+          </div>
+        </div>
+
         <div class="cfm-convert-chat-panel">
           <div class="cfm-convert-chat-section">
             <div class="cfm-convert-chat-area" id="featureChatArea">
@@ -395,11 +415,8 @@
                 <button class="cfm-convert-icon-button" id="clearFeatureSearchButton" type="button" aria-label="Clear input" title="Clear input">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
                 </button>
-                <button class="cfm-convert-send-button hidden" id="stopFeatureSearchButton" type="button" aria-label="Stop search" title="Stop search">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
-                </button>
                 <button class="cfm-convert-send-button" id="runFeaturePreviewButton" type="button" aria-label="Search">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"></path><path d="m5 12 7-7 7 7"></path></svg>
                 </button>
               </div>
             </div>
@@ -426,10 +443,6 @@
             <button class="cfm-convert-option-item" id="featureUndoMenuButton" type="button" title="Undo the last conversion">
               <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M20 20a8 8 0 0 0-8-8H4"></path></svg></span>
               <span>Undo</span>
-            </button>
-            <button class="cfm-convert-option-item" id="cancelFeatureConvertButtonMenu" type="button" title="Close convert search">
-              <span class="cfm-convert-option-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></span>
-              <span>Cancel</span>
             </button>
           </div>
         </div>
