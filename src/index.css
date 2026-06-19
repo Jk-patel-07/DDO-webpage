@@ -70,14 +70,6 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .search-popup {
-    position: fixed;
-    right: 12px;
-    bottom: 80px;
-    width: calc(100vw - 24px);
-    max-width: 100%;
-  }
-
   .search-indicator {
     right: 12px;
     bottom: 12px;

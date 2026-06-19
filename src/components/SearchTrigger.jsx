@@ -153,7 +153,7 @@ export function SearchTrigger() {
   };
 
   return (
-    <div ref={containerRef} className="relative w-64 sm:w-72 md:w-96 text-left">
+    <div ref={containerRef} className="relative w-full sm:w-72 md:w-96 text-left">
       {/* Search Input Bar */}
       <form onSubmit={onSubmit} className="relative">
         <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[#0a1810]/75 border shadow-lg backdrop-blur-md transition-all duration-300 ${
@@ -204,7 +204,7 @@ export function SearchTrigger() {
 
       {/* Results Dropdown */}
       {showResults && isActive && (
-        <div className="absolute right-0 left-0 mt-2 max-h-96 rounded-2xl border border-white/15 bg-[#0a1810]/95 shadow-2xl backdrop-blur-xl overflow-hidden z-50 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute right-0 mt-2 w-[calc(100vw-32px)] sm:w-[450px] max-h-96 rounded-2xl border border-white/15 bg-[#0a1810]/95 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] backdrop-blur-xl overflow-hidden z-50 flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 bg-white/5">
             <span className="text-xs font-semibold text-emerald-400 tracking-wider uppercase">
               {results.length > 0 ? `Matches (${results.length})` : 'No results found'}
@@ -214,7 +214,7 @@ export function SearchTrigger() {
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+          <div className="search-popup flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
             {results.length > 0 ? (
               results.map((file, idx) => (
                 <div key={idx} className="p-2.5 rounded-xl bg-white/5 border border-white/5 hover:border-emerald-500/30 hover:bg-emerald-950/20 transition-all duration-200">

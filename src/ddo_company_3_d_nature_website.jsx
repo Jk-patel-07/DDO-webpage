@@ -37,11 +37,11 @@ export default function DDOCompanyWebsite() {
     <div className="relative min-h-screen overflow-hidden bg-[#020806] text-white">
       <NatureBackground />
 
-      <header className="relative z-10 flex items-center justify-between px-6 py-6 md:px-12">
+      <header className="relative z-50 flex items-center justify-between px-6 py-6 md:px-12 gap-4">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-3"
+          className="flex items-center gap-3 flex-shrink-0"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/15 bg-white/10 shadow-lg backdrop-blur-md">
             <img src={horseLogo} alt="DDO Logo" className="h-6 w-6 object-contain invert" />
@@ -52,6 +52,7 @@ export default function DDOCompanyWebsite() {
           </div>
         </motion.div>
 
+        {/* Desktop Navigation */}
         <nav className="hidden items-center gap-8 text-sm text-white/75 md:flex">
           <a href="#about" className="transition hover:text-emerald-300">About</a>
           <a href="#services" className="transition hover:text-emerald-300">Services</a>
@@ -63,6 +64,11 @@ export default function DDOCompanyWebsite() {
             <SearchTrigger />
           </div>
         </nav>
+
+        {/* Mobile/Tablet Search Widget */}
+        <div className="flex md:hidden flex-1 justify-end max-w-[200px] sm:max-w-[280px]">
+          <SearchTrigger />
+        </div>
       </header>
 
       <main className="relative z-10">
