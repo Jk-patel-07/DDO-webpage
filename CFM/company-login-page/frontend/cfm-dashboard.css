@@ -5511,3 +5511,20 @@ body[data-theme="light"] .verify-password-btn:hover {
     width: min(900px, 100%);
   }
 }
+
+/* Global Scrollbar Hiding - Cross-Browser Support */
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  -ms-overflow-style: none !important; /* IE and legacy Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+/* Prevent horizontal scrollbars on body/html unless required */
+html, body {
+  overflow-x: hidden;
+}

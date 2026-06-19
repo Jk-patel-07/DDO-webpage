@@ -888,6 +888,201 @@ body[data-theme="light"] .cfm-convert-history-card {
   background: #f8fafc;
   border-color: rgba(148, 163, 184, 0.4);
   color: #0f172a;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(96, 165, 250, 0.32);
+color: rgba(147, 197, 253, 0.96);
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+.cfm-convert-selected-clear:hover {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.45);
+}
+.cfm-convert-selected-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cfm-convert-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(96, 165, 250, 0.14);
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  color: rgba(241, 245, 249, 0.95);
+  max-width: 100%;
+}
+.cfm-convert-selected-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: rgba(147, 197, 253, 0.96);
+  flex: 0 0 auto;
+}
+.cfm-convert-selected-chip-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.cfm-convert-selected-chip-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  min-width: 0;
+}
+.cfm-convert-selected-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: transparent;
+  border: 0;
+  color: rgba(148, 163, 184, 0.85);
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.cfm-convert-selected-chip-remove:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 250, 252, 0.96);
+}
+.cfm-convert-selected-chip-remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ----- Send button disabled state ----- */
+.cfm-convert-send-button.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+  transform: none;
+}
+.cfm-convert-send-button.is-disabled:hover {
+  transform: none;
+  background: inherit;
+  box-shadow: none;
+}
+
+/* ----- Input placeholder color tweak ----- */
+.cfm-convert-textarea {
+  font-size: 0.92rem;
+  color: rgba(241, 245, 249, 0.95);
+}
+.cfm-convert-textarea::placeholder {
+  color: rgba(203, 213, 225, 0.5);
+}
+
+/* ----- Sidebar "No file or folder selected" simplified card ----- */
+.cfm-convert-sidebar-target-summary {
+  font-size: 0.78rem;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(96, 165, 250, 0.06);
+  border: 1px dashed rgba(96, 165, 250, 0.22);
+  color: rgba(203, 213, 225, 0.78);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ----- Better contrast for grey helper text ----- */
+.cfm-convert-result-meta,
+.cfm-convert-result-filepath,
+.cfm-convert-summary-note,
+.cfm-convert-connection-meta,
+.cfm-convert-empty-sub {
+  color: rgba(203, 213, 225, 0.7);
+}
+
+/* ----- Layout polish: balanced hero + responsive sizing ----- */
+.cfm-convert-empty-state {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+}
+.cfm-convert-chat-section {
+  padding-left: 24px;
+  padding-right: 24px;
+}
+@media (max-width: 760px) {
+  .cfm-convert-quick-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cfm-convert-history-drawer {
+    width: 100%;
+  }
+}
+@media (max-width: 480px) {
+  .cfm-convert-quick-actions {
+    grid-template-columns: 1fr;
+  }
+  .cfm-convert-empty-state .cfm-convert-empty-heading {
+    font-size: 1.15rem;
+  }
+}
+
+/* Light theme support - keep CFM dark by default but soften white mode */
+body[data-theme="light"] .cfm-convert-popup .cfm-convert-sidebar-action {
+  background: rgba(241, 245, 249, 0.85);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-popup .cfm-convert-sidebar-action .cfm-convert-sidebar-icon {
+  background: rgba(96, 165, 250, 0.18);
+  color: #1d4ed8;
+}
+body[data-theme="light"] .cfm-convert-empty-state .cfm-convert-empty-heading {
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-empty-state .cfm-convert-empty-sub {
+  color: #475569;
+}
+body[data-theme="light"] .cfm-convert-quick-card {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+body[data-theme="light"] .cfm-convert-quick-title {
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-quick-copy {
+  color: #64748b;
+}
+body[data-theme="light"] .cfm-convert-empty-card {
+  background: #eff6ff;
+  border-color: rgba(96, 165, 250, 0.45);
+  color: #1e3a8a;
+}
+body[data-theme="light"] .cfm-convert-project-button {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-project-menu {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-history-drawer {
+  background: #ffffff;
+  border-left-color: rgba(148, 163, 184, 0.5);
+  color: #0f172a;
+}
+body[data-theme="light"] .cfm-convert-history-card {
+  background: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #0f172a;
 }
 body[data-theme="light"] .cfm-convert-selected-chips {
   background: #f1f5f9;
@@ -897,4 +1092,21 @@ body[data-theme="light"] .cfm-convert-selected-chip {
   background: rgba(96, 165, 250, 0.12);
   border-color: rgba(96, 165, 250, 0.32);
   color: #0f172a;
+}
+
+/* Global Scrollbar Hiding - Cross-Browser Support */
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  -ms-overflow-style: none !important; /* IE and legacy Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+/* Prevent horizontal scrollbars on body/html unless required */
+html, body {
+  overflow-x: hidden;
 }
